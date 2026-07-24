@@ -1,0 +1,53 @@
+# Dzien 1 (2026-07-24) - Podstawy skladni Robot Framework
+
+## 1. Temat dnia
+Podstawy skladni Robot Framework - struktura plikow .robot, sekcje, separator kolumn, komentarze.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Plik .robot dzieli sie na sekcje: *** Settings ***, *** Variables ***, *** Test Cases ***, *** Keywords *** - nazwy sekcji musza byc dokladnie takie.
+- Kolumny (argumenty slow kluczowych) rozdziela sie co najmniej dwoma spacjami albo znakiem tabulacji - jedna spacja nie wystarczy i RF potraktuje tekst jako jeden argument.
+- Nazwy testow i slow kluczowych pisz w stylu czytelnym dla czlowieka (Title Case, pelne zdania), np. "Zaloguj uzytkownika z poprawnymi danymi" - to jednoczesnie dokumentacja testu.
+- Uzywaj "..." (trzy kropki) do kontynuacji dlugiej linii - poprawia czytelnosc w repo i podczas code review.
+- Komentarze zaczynaj od # na poczatku linii lub jako osobna kolumna - nie mieszaj kodu i komentarza w tej samej "komorce".
+
+## 3. Przykladowy kod
+```robotframework
+*** Settings ***
+Library           BuiltIn
+Documentation     Przykladowy test pokazujacy podstawowa skladnie RF.
+
+*** Variables ***
+${URL}            https://example.com
+${BROWSER}        chrome
+
+*** Test Cases ***
+Sprawdzenie podstawowego dodawania
+    [Documentation]    Test weryfikuje dzialanie prostego slowa kluczowego.
+    [Tags]    smoke    podstawy
+    ${wynik}=    Evaluate    2 + 2
+    Should Be Equal As Integers    ${wynik}    4
+
+Test z dluga linia i kontynuacja
+    Log Many
+    ...    Pierwsza linia logu
+    ...    Druga linia logu
+    ...    Trzecia linia logu
+```
+
+## 4. Najczestsze bledy
+- Rozdzielanie argumentow pojedyncza spacja zamiast dwiema - RF zlepia argumenty w jeden string.
+- Literowki w nazwach sekcji (np. *** Test Case *** zamiast *** Test Cases ***) - sekcja zostaje zignorowana bez wyraznego bledu.
+- Mieszanie tabulacji i spacji w tym samym pliku, co powoduje trudne do zdiagnozowania bledy parsowania.
+- Brak [Documentation] i [Tags] - testy staja sie nieczytelne przy wiekszej skali projektu.
+
+## 5. Ulepszenia z AI
+- Poproś Claude/Copilot o wygenerowanie szkieletu pliku .robot na podstawie opisu scenariusza w jezyku naturalnym ("napisz test logowania z niepoprawnym haslem").
+- Wklej istniejacy plik .robot i poproś AI o wykrycie bledow skladniowych (np. zle odstepy, brakujace sekcje) przed uruchomieniem testu.
+- Uzyj AI do konwersji nieformalnych krokow testowych (np. z Jira/user story) na gotowa strukture Test Case + Keywords.
+- Poproś o wygenerowanie dokumentacji [Documentation] na podstawie krokow testu, jesli zostala pominieta.
+
+## Zadanie na dzis
+Napisz plik .robot z sekcjami Settings, Variables i Test Cases, zawierajacy jeden test, ktory uzywa co najmniej dwoch wbudowanych slow kluczowych (Log, Should Be Equal, Evaluate itp.) oraz poprawnie sformatowana kontynuacje linii (...).
+
+================================================================================
+
