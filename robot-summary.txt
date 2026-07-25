@@ -51,3 +51,55 @@ Napisz plik .robot z sekcjami Settings, Variables i Test Cases, zawierajacy jede
 
 ================================================================================
 
+# Dzien 2 (2026-07-25) - Slowa kluczowe wbudowane (BuiltIn)
+
+## 1. Temat dnia
+Slowa kluczowe wbudowane z biblioteki BuiltIn - najczesciej uzywane keywordy dostepne w kazdym pliku .robot bez importu.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Biblioteka BuiltIn jest importowana domyslnie - nie trzeba jej dodawac w sekcji Settings, zawiera m.in. Log, Should Be Equal, Set Variable, Run Keyword If, Evaluate.
+- Do porownan uzywaj wlasciwego typu asercji: Should Be Equal (stringi), Should Be Equal As Integers/Numbers (liczby) - porownanie stringa z liczba bez konwersji czesto konczy sie falszywym PASS lub myllacym FAIL.
+- Unikaj nadmiernego zagniezdzania Run Keyword If - powyzej 2 warunkow czytelniej jest napisac wlasny Custom Keyword lub uzyc IF/ELSE (nowa skladnia RF 5+).
+- Set Variable, Set Test Variable, Set Suite Variable i Set Global Variable maja rozny zasieg - dobierz najwezszy mozliwy, zeby nie "wyciekaly" zmienne miedzy testami.
+- Uzywaj Should Contain, Should Match, Should Start With zamiast recznego parsowania stringow - kod jest krotszy i czytelniejszy w log.html.
+
+## 3. Przykladowy kod
+```robotframework
+*** Test Cases ***
+Weryfikacja slow kluczowych BuiltIn
+    [Documentation]    Przyklad uzycia popularnych keywordow z biblioteki BuiltIn.
+    ${suma}=    Evaluate    10 + 5
+    Should Be Equal As Integers    ${suma}    15
+
+    ${status}=    Set Variable    aktywny
+    IF    '${status}' == 'aktywny'
+        Log    Uzytkownik jest aktywny    console=True
+    ELSE
+        Fail    Nieoczekiwany status uzytkownika
+    END
+
+    ${tekst}=    Set Variable    Robot Framework to super narzedzie
+    Should Contain    ${tekst}    Framework
+    Should Not Be Empty    ${tekst}
+
+    Run Keyword If    ${suma} > 10    Log    Suma wieksza niz 10
+    ...    ELSE    Log    Suma mniejsza lub rowna 10
+```
+
+## 4. Najczestsze bledy
+- Uzywanie Should Be Equal do porownania liczb bez konwersji typu (np. porownanie ${x} z "5" jako string zamiast liczby).
+- Nadmiar zagniezdzonych Run Keyword If zamiast czytelnego IF/ELSE lub osobnego keywordu.
+- Nadpisywanie zmiennych globalnych (Set Global Variable) tam, gdzie wystarczy Set Test Variable - powoduje trudne do namierzenia zaleznosci miedzy testami.
+- Ignorowanie wartosci zwracanej przez Evaluate/Set Variable i poleganie na efektach ubocznych zamiast jawnych asercji.
+
+## 5. Ulepszenia z AI
+- Poproś Claude/Copilot o liste najbardziej przydatnych keywordow BuiltIn do konkretnego scenariusza (np. "jakich slow kluczowych uzyc do walidacji listy stringow").
+- Wklej fragment testu z zagniezdzonymi Run Keyword If i poproś AI o refaktoryzacje do czytelnej skladni IF/ELSE.
+- Uzyj AI do wygenerowania zestawu asercji (Should Be Equal, Should Contain, Should Match Regexp) na podstawie opisu oczekiwanego zachowania w jezyku naturalnym.
+- Poproś o wyjasnienie roznicy miedzy Set Test/Suite/Global Variable w kontekscie konkretnego projektu, gdy nie jest jasne, ktorego uzyc.
+
+## Zadanie na dzis
+Napisz test, ktory pobiera wartosc liczbowa przez Evaluate, sprawdza ja warunkiem IF/ELSE, a nastepnie uzywa co najmniej dwoch roznych asercji Should * (np. Should Contain i Should Be Equal As Integers) na wynikach posrednich.
+
+================================================================================
+
