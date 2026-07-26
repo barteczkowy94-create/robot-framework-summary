@@ -103,3 +103,64 @@ Napisz test, ktory pobiera wartosc liczbowa przez Evaluate, sprawdza ja warunkie
 
 ================================================================================
 
+# Dzien 3 (2026-07-26) - Zmienne i ich zasiegi
+
+## 1. Temat dnia
+Zmienne w Robot Framework - typy zmiennych (${scalar}, @{list}, &{dict}, %{env}) oraz ich zasiegi (scopes): lokalny, testowy, suite'owy i globalny.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- RF ma cztery typy zmiennych: ${scalar} (pojedyncza wartosc), @{list} (lista), &{dict} (slownik), %{env} (zmienna srodowiskowa) - dobierz typ zgodnie z rzeczywista struktura danych, nie tylko ${} do wszystkiego.
+- Zasieg domyslny zmiennej ustawionej przez "${x}=    Keyword" wewnatrz test case'u to zasieg lokalny (tylko biezacy test) - jesli potrzebujesz przekazac wartosc dalej, uzyj Set Test/Suite/Global Variable.
+- Hierarchia zasiegow od najwezszego do najszerszego: lokalny (Keyword/Test) -> Set Test Variable -> Set Suite Variable -> Set Global Variable - zawsze wybieraj najwezszy mozliwy, by uniknac wyciekania stanu miedzy testami.
+- Zmienne zdefiniowane w sekcji *** Variables *** sa dostepne w calym suite od momentu wczytania pliku - nadpisuj je w razie potrzeby przez wiersz polecen (-v NAZWA:wartosc) zamiast edytowac plik.
+- Do zmiennych srodowiskowych i konfiguracyjnych uzywaj %{ZMIENNA_SRODOWISKOWA} lub Get Environment Variable z wartoscia domyslna, zamiast zakladac, ze zmienna zawsze istnieje.
+
+## 3. Przykladowy kod
+```robotframework
+*** Settings ***
+Library           Collections
+Library           OperatingSystem
+
+*** Variables ***
+${BASE_URL}       https://example.com
+@{UZYTKOWNICY}    admin    tester    gosc
+&{DANE_LOGOWANIA}    login=admin    haslo=Sekret123
+
+*** Test Cases ***
+Zmienne scalar, list i dict
+    [Documentation]    Prezentacja roznych typow zmiennych i ich zasiegow.
+    Log    Adres bazowy: ${BASE_URL}
+
+    FOR    ${uzytkownik}    IN    @{UZYTKOWNICY}
+        Log    Przetwarzam uzytkownika: ${uzytkownik}
+    END
+
+    Log    Login: ${DANE_LOGOWANIA}[login]
+
+    ${licznik}=    Set Variable    0
+    Set Test Variable    ${licznik}    1
+    Set Suite Variable    ${OSTATNI_TEST}    Zmienne scalar, list i dict
+
+Odczyt zmiennej srodowiskowej z wartoscia domyslna
+    ${env}=    Get Environment Variable    RF_ENV    default
+    Should Not Be Empty    ${env}
+    Log    Srodowisko testowe: ${env}
+```
+
+## 4. Najczestsze bledy
+- Ustawianie zmiennej lokalnie (${x}=    Keyword) i oczekiwanie, ze bedzie widoczna w kolejnym tescie - bez Set Test/Suite Variable znika po zakonczeniu testu.
+- Nadmierne uzycie Set Global Variable "na wszelki wypadek" - powoduje trudne do wytropienia zaleznosci i testy, ktore dzialaja tylko w okreslonej kolejnosci.
+- Mieszanie typow: dostep do listy jak do zmiennej skalarnej (${UZYTKOWNICY} zamiast @{UZYTKOWNICY} przy iteracji) - RF nie zawsze zglosi to jako blad, ale zachowanie bedzie nieoczekiwane.
+- Brak wartosci domyslnej przy odczycie zmiennych srodowiskowych/konfiguracyjnych - test wywala sie z niejasnym bledem na innym srodowisku (np. lokalnie vs CI).
+
+## 5. Ulepszenia z AI
+- Poproś Claude/Copilot o przeanalizowanie istniejacego suite'u i wskazanie, gdzie zmienne maja zbyt szeroki zasieg (np. nadmiar Set Global Variable) wraz z propozycja zawezenia.
+- Wklej fragment testu z powtarzajacymi sie literalami (URL-e, dane logowania) i poproś AI o wyodrebnienie ich do sekcji *** Variables *** lub pliku resource.
+- Uzyj AI do wygenerowania przykladowych danych testowych jako @{list} lub &{dict} na podstawie opisu struktury (np. "wygeneruj slownik z 5 polami uzytkownika").
+- Poproś o wyjasnienie, dlaczego konkretna zmienna "nie dziala" w kolejnym tescie/keywordzie - AI szybko wskaze brakujacy Set Test/Suite/Global Variable.
+
+## Zadanie na dzis
+Napisz suite z co najmniej dwoma testami: w pierwszym ustaw zmienna przez Set Suite Variable, a w drugim odczytaj i zweryfikuj jej wartosc. Dodatkowo zdefiniuj zmienna typu @{list} i &{dict} w sekcji *** Variables *** i uzyj obu w petli FOR oraz przy dostepie do konkretnego klucza slownika.
+
+================================================================================
+
