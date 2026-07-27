@@ -164,3 +164,75 @@ Napisz suite z co najmniej dwoma testami: w pierwszym ustaw zmienna przez Set Su
 
 ================================================================================
 
+# Dzien 4 (2026-07-27) - Test/Suite/Task setup i teardown
+
+## 1. Temat dnia
+Setup i teardown na poziomie testu, suite'u i taska (RPA) - jak przygotowywac srodowisko przed testami i sprzatac po nich niezaleznie od wyniku.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Suite Setup/Suite Teardown (sekcja *** Settings ***) uruchamiaja sie raz na caly plik/suite - idealne do kosztownych operacji, np. logowanie, start serwera, otwarcie przegladarki.
+- Test Setup/Test Teardown w *** Settings *** ustawiaja domyslne zachowanie dla WSZYSTKICH testow w pliku; [Setup]/[Teardown] zdefiniowany bezposrednio przy tescie NADPISUJE domyslny, a nie dodaje sie do niego.
+- Teardown wykonuje sie zawsze - rowniez wtedy, gdy test/suite zakonczyl sie bledem, timeoutem lub Fatal Error - dlatego to wlasciwe miejsce na zamykanie zasobow (przegladarka, polaczenia, pliki tymczasowe).
+- Do laczenia kilku slow kluczowych w jednym [Setup]/[Teardown] uzywaj Run Keywords ... AND ..., a przy wiekszej liczbie krokow lepiej wydzielic osobny Custom Keyword - jest czytelniej w log.html.
+- W teardownie stosuj Run Keyword If Test Failed (zrzut ekranu, dodatkowe logi tylko przy porazce) oraz Run Keyword And Ignore Error dla krokow sprzatajacych, ktore nie powinny przerywac kolejnych krokow czyszczenia.
+- W RPA (Robot Framework jako framework do automatyzacji procesow) analogiczne role pelnia Task Setup/Task Teardown - dzialaja identycznie jak Test Setup/Teardown, ale w kontekscie *** Tasks ***.
+
+## 3. Przykladowy kod
+```robotframework
+*** Settings ***
+Library           SeleniumLibrary
+Suite Setup       Otworz przegladarke i zaloguj
+Suite Teardown    Zamknij wszystkie przegladarki
+Test Setup        Przejdz na strone glowna
+Test Teardown     Wykonaj sprzatanie po tescie
+
+*** Test Cases ***
+Test z domyslnym teardown
+    [Documentation]    Korzysta z Test Setup/Teardown zdefiniowanych w Settings.
+    Page Should Contain    Witaj
+
+Test z wlasnym teardown nadpisujacym domyslny
+    [Teardown]    Run Keywords    Zrzut ekranu przy bledzie    AND    Wyloguj uzytkownika
+    Fail    Celowy blad do demonstracji dzialania teardown
+
+*** Keywords ***
+Otworz przegladarke i zaloguj
+    Open Browser    https://example.com    chrome
+    Input Text    id=login    admin
+    Input Text    id=haslo    Sekret123
+    Click Button    Zaloguj
+
+Zamknij wszystkie przegladarki
+    Close All Browsers
+
+Przejdz na strone glowna
+    Go To    https://example.com/dashboard
+
+Wykonaj sprzatanie po tescie
+    Run Keyword If Test Failed    Zrzut ekranu przy bledzie
+    Run Keyword And Ignore Error    Log    Test zakonczony, sprzatanie wykonane
+
+Zrzut ekranu przy bledzie
+    Capture Page Screenshot
+
+Wyloguj uzytkownika
+    Click Button    Wyloguj
+```
+
+## 4. Najczestsze bledy
+- Zalozenie, ze [Teardown] przy tescie "dolacza sie" do Test Teardown z Settings - w rzeczywistosci go zastepuje, przez co domyslne sprzatanie po cichu przestaje dzialac dla tego testu.
+- Wykonywanie zrzutow ekranu/dodatkowych logow w kazdym teardownie bez warunku Run Keyword If Test Failed - logi robia sie ogromne i trudne do przegladania.
+- Niestabilny teardown, ktory sam rzuca wyjatkiem (np. probuje zamknac przegladarke, ktora nigdy sie nie otworzyla) - warto zabezpieczyc krytyczne kroki sprzatania przez Run Keyword And Ignore Error.
+- Umieszczanie w Suite Setup logiki, ktora powinna byc w Test Setup (np. logowanie tego samego uzytkownika przed kazdym testem) - powoduje, ze testy dzieda sie od wspolnego, mutowalnego stanu i nie sa od siebie niezalezne.
+
+## 5. Ulepszenia z AI
+- Poproś Claude/Copilot o przeanalizowanie suite'u pod katem brakujacych teardownow - np. gdzie Open Browser/Connect nie ma odpowiadajacego Close/Disconnect.
+- Wklej test konczacy sie bledem w teardownie i poproś AI o dodanie Run Keyword And Ignore Error tam, gdzie to bezpieczne, bez ukrywania prawdziwych bledow testu.
+- Uzyj AI do wygenerowania wspolnego Custom Keyword laczacego kilka krokow sprzatania (np. wylogowanie + zamkniecie przegladarki + usuniecie plikow tymczasowych) na podstawie opisu w jezyku naturalnym.
+- Poproś AI o wyjasnienie, dlaczego dany test "traci" domyslny teardown - czesto wystarczy wskazac, ze [Teardown] przy tescie nadpisuje Test Teardown z Settings.
+
+## Zadanie na dzis
+Napisz suite z Suite Setup/Suite Teardown (np. symulowane otwarcie/zamkniecie "polaczenia" przez Log) oraz Test Setup/Test Teardown w Settings. Dodaj dwa testy: pierwszy niech korzysta z domyslnego teardown, a drugi niech ma wlasny [Teardown] uzywajacy Run Keyword If Test Failed do warunkowego logowania dodatkowych informacji.
+
+================================================================================
+
