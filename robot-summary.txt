@@ -236,3 +236,71 @@ Napisz suite z Suite Setup/Suite Teardown (np. symulowane otwarcie/zamkniecie "p
 
 ================================================================================
 
+# Dzien 5 (2026-07-28) - Biblioteki standardowe (Collections, String, OperatingSystem, DateTime)
+
+## 1. Temat dnia
+Wbudowane biblioteki standardowe Robot Framework inne niz BuiltIn: Collections (listy/slowniki), String (operacje na tekscie), OperatingSystem (pliki i system) oraz DateTime (data i czas).
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Kazda z tych bibliotek wymaga jawnego importu w sekcji *** Settings *** (Library Collections / String / OperatingSystem / DateTime) - w przeciwienstwie do BuiltIn nie sa dostepne domyslnie.
+- Collections udostepnia dedykowane asercje dla list/slownikow (Lists Should Be Equal, Dictionary Should Contain Key) - sa czytelniejsze i daja lepsze komunikaty bledow niz porownywanie recznie przez Should Be Equal.
+- String sluzy do manipulacji tekstem (Split String, Strip String, Get Substring, Convert To Upper Case) - unikaj laczenia jej z zewnetrznymi skryptami tam, gdzie wystarczy gotowy keyword.
+- OperatingSystem daje dostep do plikow/katalogow/zmiennych srodowiskowych (Create File, Remove File, Directory Should Exist) - przydatne przy testach RPA i przygotowywaniu danych wejsciowych/wyjsciowych.
+- DateTime pozwala liczyc i formatowac daty (Get Current Date, Subtract Time From Date, Convert Date) - zawsze podawaj jawny format i strefe czasowa, zeby testy byly powtarzalne niezaleznie od maszyny CI.
+- Wybieraj biblioteke adekwatnie do typu danych: Collections dla struktur (list/dict), String dla surowego tekstu - mieszanie ich tam, gdzie jedna wystarczy, zwieksza zlozonosc testu.
+
+## 3. Przykladowy kod
+```robotframework
+*** Settings ***
+Library           Collections
+Library           String
+Library           OperatingSystem
+Library           DateTime
+
+*** Test Cases ***
+Operacje na liscie i slowniku
+    [Documentation]    Przyklad uzycia biblioteki Collections.
+    @{owoce}=    Create List    jablko    gruszka    banan
+    Append To List    ${owoce}    pomarancza
+    Lists Should Be Equal    ${owoce}    ${{['jablko', 'gruszka', 'banan', 'pomarancza']}}
+
+    &{dane}=    Create Dictionary    imie=Jan    wiek=30
+    Dictionary Should Contain Key    ${dane}    imie
+    Set To Dictionary    ${dane}    miasto=Warszawa
+
+Operacje tekstowe i plikowe
+    [Documentation]    Przyklad uzycia bibliotek String i OperatingSystem.
+    ${tekst}=    Set Variable    Robot Framework, wersja 7
+    ${czesci}=    Split String    ${tekst}    ,
+    ${wielkie}=    Convert To Upper Case    ${tekst}
+    Should Contain    ${wielkie}    ROBOT
+
+    Create File    ${OUTPUT_DIR}/raport.txt    Wynik testu: OK
+    File Should Exist    ${OUTPUT_DIR}/raport.txt
+    ${zawartosc}=    Get File    ${OUTPUT_DIR}/raport.txt
+    Should Contain    ${zawartosc}    OK
+
+Operacje na dacie i czasie
+    [Documentation]    Przyklad uzycia biblioteki DateTime.
+    ${dzis}=    Get Current Date    result_format=%Y-%m-%d
+    ${za_tydzien}=    Add Time To Date    ${dzis}    7 days    result_format=%Y-%m-%d
+    Log    Dzisiaj: ${dzis}, za tydzien: ${za_tydzien}
+```
+
+## 4. Najczestsze bledy
+- Uzywanie keywordow z Collections/String/DateTime bez importu odpowiedniej biblioteki - RF zglosi blad "No keyword with name X found", co bywa mylone z literowka w nazwie.
+- Porownywanie list/slownikow przez Should Be Equal zamiast Lists Should Be Equal/Dictionaries Should Be Equal - kolejnosc elementow lub typ danych powoduje falszywe FAIL trudne do zdiagnozowania.
+- Zakladanie stalego formatu daty zwracanego przez Get Current Date bez podania result_format - test dziala inaczej lokalnie i na serwerze CI w innej strefie czasowej.
+- Tworzenie plikow testowych bezposrednio w katalogu projektu zamiast w ${OUTPUT_DIR} - zasmieca repozytorium i utrudnia sprzatanie po testach.
+
+## 5. Ulepszenia z AI
+- Poproś Claude/Copilot o wskazanie, ktora biblioteka standardowa (Collections/String/OperatingSystem/DateTime) pasuje do danego zadania, gdy nie jest oczywiste, gdzie szukac keywordu.
+- Wklej fragment testu porownujacego listy/slowniki przez Should Be Equal i poproś AI o refaktoryzacje do dedykowanych keywordow z Collections.
+- Uzyj AI do wygenerowania przykladowych danych testowych (listy, slowniki, teksty, daty) na podstawie opisu struktury w jezyku naturalnym.
+- Poproś AI o wyjasnienie komunikatu bledu "No keyword with name X found" - czesto szybko wskaze brakujacy import biblioteki.
+
+## Zadanie na dzis
+Napisz test, ktory: utworzy liste i slownik przez Collections i zweryfikuje ich zawartosc dedykowanymi keywordami, podzieli tekst na czesci przez Split String z biblioteki String, zapisze wynik do pliku w ${OUTPUT_DIR} przez OperatingSystem, a na koniec obliczy date za 7 dni od dzisiaj przez DateTime.
+
+================================================================================
+
