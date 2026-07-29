@@ -304,3 +304,108 @@ Napisz test, ktory: utworzy liste i slownik przez Collections i zweryfikuje ich 
 
 ================================================================================
 
+
+================================================================================
+# DZIEN 6: TESTY WEBOWE - SELENIUMLIBRARY / BROWSER LIBRARY (PLAYWRIGHT)
+Data: 2026-07-29 (sroda)
+================================================================================
+
+## 1. Temat dnia
+Automatyzacja testow webowych w Robot Framework - klasyczna **SeleniumLibrary**
+oraz nowoczesna **Browser Library** oparta na Playwright. Skupiamy sie glownie
+na Browser Library jako aktualnie rekomendowanym wyborze dla nowych projektow.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Wybieraj **Browser Library (Playwright)** do nowych projektow - dziala szybciej,
+  ma wbudowane auto-waity (nie trzeba recznie robic Wait Until Element Is Visible
+  tak czesto jak w Selenium) i lepiej obsluguje nowoczesne SPA.
+- Uzywaj **selektorow tekstowych/CSS/testid** zamiast kruchych XPath opartych na
+  strukturze DOM - `"css=[data-testid=login-button]"` przetrwa refaktoryzacje UI.
+- Zawsze otwieraj przegladarke w `Suite Setup` i zamykaj w `Suite Teardown`
+  (`New Browser` / `Close Browser`), a nowa strone (`New Page`) per test, jesli
+  testy maja byc od siebie niezalezne.
+- Stosuj **Page Object Pattern** - trzymaj lokalizatory i akcje na danej stronie
+  w osobnym Resource file, testy nie powinny znac szczegolow selektorow.
+- Korzystaj z wbudowanych auto-waitow Browser Library zamiast `Sleep` -
+  `Click`, `Fill Text` same czekaja az element bedzie interaktywny.
+
+## 3. Przyklad kodu (.robot)
+```robotframework
+*** Settings ***
+Library    Browser
+Suite Setup       New Browser    chromium    headless=true
+Suite Teardown    Close Browser
+Test Setup        New Page    https://example.com/login
+
+*** Variables ***
+${LOGIN_INPUT}      css=#username
+${PASSWORD_INPUT}    css=#password
+${LOGIN_BUTTON}     css=[data-testid=login-button]
+${WELCOME_TEXT}     css=.welcome-message
+
+*** Test Cases ***
+Poprawne logowanie uzytkownika
+    [Documentation]    Sprawdza logowanie z prawidlowymi danymi.
+    [Tags]    web    smoke
+    Fill Text    ${LOGIN_INPUT}    jan.kowalski
+    Fill Text    ${PASSWORD_INPUT}    TajneHaslo123
+    Click    ${LOGIN_BUTTON}
+    Get Text    ${WELCOME_TEXT}    contains    Witaj, Jan
+
+Blokada logowania przy pustym hasle
+    [Documentation]    Weryfikuje komunikat bledu przy braku hasla.
+    [Tags]    web    negative
+    Fill Text    ${LOGIN_INPUT}    jan.kowalski
+    Click    ${LOGIN_BUTTON}
+    Get Text    css=.error-message    ==    Haslo jest wymagane
+```
+
+Rownowaznik w SeleniumLibrary (dla porownania):
+```robotframework
+*** Settings ***
+Library    SeleniumLibrary
+
+*** Test Cases ***
+Logowanie - SeleniumLibrary
+    Open Browser    https://example.com/login    chrome
+    Input Text    id=username    jan.kowalski
+    Input Password    id=password    TajneHaslo123
+    Click Button    css=[data-testid=login-button]
+    Wait Until Element Is Visible    css=.welcome-message    timeout=5s
+    Element Should Contain    css=.welcome-message    Witaj, Jan
+    [Teardown]    Close Browser
+```
+
+## 4. Najczestsze bledy
+- Uzywanie `Sleep` zamiast auto-waitow lub `Wait Until ...` - testy sa wolne
+  i niestabilne, bo czas oczekiwania jest zgadywany na sztywno.
+- Twarde XPath typu `//div[3]/div[2]/span` - lamie sie przy kazdej zmianie
+  ukladu strony; lepiej uzywac atrybutow `data-testid` lub tekstu widocznego.
+- Nie zamykanie przegladarki/strony w Teardown - wycieki procesow przegladarki
+  na agentach CI i spowolnienie kolejnych uruchomien.
+- Mieszanie SeleniumLibrary i Browser Library w jednym pliku testowym bez
+  wyraznego powodu - roznia sie skladnia keywordow (np. Click vs Click Button)
+  i utrudnia to utrzymanie kodu.
+- Testowanie na jednej przegladarce i zakladanie, ze wynik bedzie identyczny
+  wszedzie - warto uruchamiac krytyczne testy tez na firefox/webkit.
+
+## 5. Ulepszenia z AI
+- Wklej fragment HTML/DOM elementu do Claude/ChatGPT i poproś o zaproponowanie
+  stabilnego selektora (najlepiej opartego na `data-testid` lub roli ARIA).
+- Poproś AI o przepisanie testu z SeleniumLibrary na Browser Library (Playwright)
+  - AI dobrze mapuje odpowiedniki keywordow (`Input Text` -> `Fill Text` itp.).
+- Uzyj AI do analizy zrzutu ekranu bledu (np. z `report.html`) i opisania,
+  ktory element mogl nie zaladowac sie na czas.
+- Generuj przez AI warianty negatywnych scenariuszy logowania (puste pola,
+  niepoprawne dane, znaki specjalne) na podstawie jednego dzialajacego testu.
+- Poproś AI o wygenerowanie Page Object (Resource file) na podstawie listy
+  lokalizatorow i opisu akcji na stronie.
+
+## Zadanie na dzis
+Zainstaluj Browser Library (`pip install robotframework-browser` + `rfbrowser init`)
+i napisz test, ktory otworzy dowolna publiczna strone z formularzem logowania,
+wypelni pola przez `Fill Text`, kliknie przycisk przez `Click`, a nastepnie
+zweryfikuje komunikat bledu (bo dane beda niepoprawne) przez `Get Text`.
+Dodaj [Tags] web oraz Suite Setup/Teardown zarzadzajace przegladarka.
+
+================================================================================
