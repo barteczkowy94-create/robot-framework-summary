@@ -409,3 +409,102 @@ zweryfikuje komunikat bledu (bo dane beda niepoprawne) przez `Get Text`.
 Dodaj [Tags] web oraz Suite Setup/Teardown zarzadzajace przegladarka.
 
 ================================================================================
+
+# Dzien 7 (2026-07-30, czwartek) - RequestsLibrary do testow API
+
+## 1. Temat dnia
+Testowanie API (REST) w Robot Framework za pomoca biblioteki RequestsLibrary -
+sesje HTTP, wysylanie zadan GET/POST/PUT/DELETE oraz walidacja odpowiedzi JSON.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Zawsze zaczynaj od `Create Session` z nazwa i adresem bazowym (base URL) -
+  pozwala to potem odwolywac sie tylko do sciezek wzglednych (`/posts`) zamiast
+  powtarzac pelny adres URL w kazdym zadaniu.
+- Preferuj nowsze keywordy `GET On Session`, `POST On Session`, `PUT On Session`,
+  `DELETE On Session` (dzialajace na sesji) zamiast starszych `Get Request`/
+  `Post Request` bez sesji - latwiej zarzadzac wspolnymi naglowkami i auth.
+- Uzywaj parametru `expected_status` zamiast recznego sprawdzania kodu - RF
+  od razu zglosi czytelny blad, jesli API zwroci inny status niz oczekiwany
+  (np. `expected_status=200` albo `expected_status=201`).
+- Odpowiedz (`response`) to obiekt Pythona - dostep do danych przez
+  `${response.json()}`, `${response.status_code}`, `${response.text}`; do
+  walidacji struktury JSON korzystaj z biblioteki Collections
+  (`Dictionary Should Contain Key`, `Get From Dictionary`).
+- Tokeny, klucze API i dane logowania trzymaj w zmiennych srodowiskowych lub
+  pliku konfiguracyjnym (`%{API_TOKEN}`), nigdy jako literal w pliku .robot -
+  szczegolnie jesli repo jest publiczne.
+- Ustawiaj rozsadny `timeout` przy tworzeniu sesji, zeby test nie wisial
+  w nieskonczonosc przy niedostepnym serwerze/API.
+
+## 3. Przykladowy kod
+```robotframework
+*** Settings ***
+Library           RequestsLibrary
+Library           Collections
+
+*** Variables ***
+${BASE_URL}       https://jsonplaceholder.typicode.com
+
+*** Test Cases ***
+Pobranie listy postow (GET)
+    [Documentation]    Test pobiera liste zasobow i weryfikuje odpowiedz.
+    [Tags]    api    smoke
+    Create Session    jsonplaceholder    ${BASE_URL}    timeout=10
+    ${response}=    GET On Session    jsonplaceholder    /posts    expected_status=200
+    Should Be Equal As Integers    ${response.status_code}    200
+    ${liczba}=    Get Length    ${response.json()}
+    Should Be True    ${liczba} > 0
+
+Utworzenie nowego zasobu (POST)
+    [Documentation]    Test wysyla dane JSON i weryfikuje utworzenie zasobu.
+    [Tags]    api
+    Create Session    jsonplaceholder    ${BASE_URL}    timeout=10
+    &{dane}=    Create Dictionary    title=Testowy post    body=Tresc testowa    userId=1
+    ${response}=    POST On Session    jsonplaceholder    /posts    json=${dane}    expected_status=201
+    Dictionary Should Contain Key    ${response.json()}    id
+    Should Be Equal    ${response.json()}[title]    Testowy post
+
+Obsluga bledu 404 (negatywny scenariusz)
+    [Documentation]    Sprawdza reakcje API na nieistniejacy zasob.
+    [Tags]    api    negative
+    Create Session    jsonplaceholder    ${BASE_URL}    timeout=10
+    ${response}=    GET On Session    jsonplaceholder    /posts/99999    expected_status=404
+    Should Be Equal As Integers    ${response.status_code}    404
+```
+
+## 4. Najczestsze bledy
+- Uzywanie starszych keywordow bez sesji (`Get Request`, `Post Request`) tam,
+  gdzie lepiej pasuje sesja z `Create Session` - trudniej wtedy zarzadzac
+  wspolnymi naglowkami (np. tokenem auth) dla wielu zadan w tym samym pliku.
+- Brak `expected_status` i poleganie tylko na tym, ze RF sam zglosi wyjatek -
+  bez jawnego assercji trudno odroznic blad testu od faktycznej awarii API.
+- Zakladanie, ze klucz zawsze istnieje w odpowiedzi JSON (`${response.json()}[klucz]`)
+  bez wczesniejszej weryfikacji `Dictionary Should Contain Key` - nieczytelny
+  KeyError zamiast jasnego komunikatu bledu.
+- Hardkodowanie tokenow/API keys bezposrednio w pliku .robot zamiast w
+  zmiennych srodowiskowych lub bezpiecznym pliku konfiguracyjnym.
+- Brak `timeout` przy `Create Session` - test moze wisiec bardzo dlugo, gdy
+  API nie odpowiada, zamiast szybko zakonczyc sie czytelnym bledem.
+
+## 5. Ulepszenia z AI
+- Poproś Claude/Copilot o wygenerowanie testow RequestsLibrary na podstawie
+  specyfikacji OpenAPI/Swagger danego API (endpointy, metody, kody statusow).
+- Wklej przykladowa odpowiedz JSON z API i poproś AI o wygenerowanie asercji
+  Collections (`Dictionary Should Contain Key`, `Get From Dictionary`) do
+  walidacji jej struktury.
+- Uzyj AI do wygenerowania przykladowych danych testowych (payloadow JSON) do
+  testow POST/PUT na podstawie opisu modelu danych.
+- Poproś AI o przeksztalcenie polecenia `curl` na odpowiadajacy mu fragment
+  .robot z RequestsLibrary (Create Session + odpowiedni keyword On Session).
+- Wklej log bledu nieudanego testu API i poproś AI o wskazanie, czy problem
+  lezy po stronie testu (zla asercja/URL) czy po stronie API (np. 500/timeout).
+
+## Zadanie na dzis
+Napisz suite korzystajacy z RequestsLibrary i Collections, ktory: utworzy
+sesje do publicznego API (np. jsonplaceholder.typicode.com), wykona test GET
+zwracajacy liste i zweryfikuje jej dlugosc oraz strukture pierwszego elementu,
+wykona test POST tworzacy nowy zasob z walidacja kodu statusu (expected_status)
+i zawartosci odpowiedzi, oraz dodatkowo test negatywny sprawdzajacy odpowiedz
+API na zadanie o nieistniejacy zasob (np. status 404).
+
+================================================================================
