@@ -508,3 +508,116 @@ i zawartosci odpowiedzi, oraz dodatkowo test negatywny sprawdzajacy odpowiedz
 API na zadanie o nieistniejacy zasob (np. status 404).
 
 ================================================================================
+# Dzien 8 (2026-07-31, piatek) - Dane testowe i Data-Driven Testing z Templates
+
+## 1. Temat dnia
+Dzisiejszy temat to obsluga danych testowych oraz Data-Driven Testing (DDT)
+w Robot Framework przy uzyciu sekcji `[Template]`. Zamiast pisac osobny Test
+Case dla kazdego zestawu danych, definiujemy jeden szablonowy Keyword, a w
+sekcji `*** Test Cases ***` podajemy tylko kolejne wiersze danych wejsciowych.
+Znacznie skraca to testy i ulatwia utrzymanie logiki w jednym miejscu.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- `[Template]` w Test Case (lub globalnie w `*** Settings ***` jako
+  `Test Template`) zamienia kazdy wiersz danych pod nazwa testu w osobne
+  wywolanie wskazanego Keywordu - kazdy wiersz to de facto oddzielny "test".
+- Kazdy wiersz danych w takim Test Case powinien miec czytelna nazwe
+  (np. "Logowanie z pustym haslem"), bo to ona pojawia sie w log.html/report.html
+  jako identyfikator konkretnego przypadku.
+- Dane testowe warto trzymac oddzielnie od logiki: w plikach CSV/Excel
+  wczytywanych przez `OperatingSystem`/biblioteki zewnetrzne, w zmiennych
+  (`*** Variables ***`) lub w osobnym Resource file - Keyword szablonowy
+  ma tylko przyjmowac argumenty, a nie zawierac dane na sztywno.
+- Do parametryzacji wielu argumentow na wiersz uzywaj tabel z wyrownanymi
+  kolumnami (dobra czytelnosc) oraz `...` do kontynuacji dlugich wierszy.
+- Laczenie `[Template]` z `[Tags]` per wiersz (np. `[Tags]` w kolejnych
+  liniach) pozwala selektywnie uruchamiac tylko wybrane przypadki danych.
+- Gdy jeden wiersz danych zawiedzie, pozostale wiersze i tak sie wykonaja -
+  to zaleta DDT (pelny raport wszystkich przypadkow), ale trzeba o tym
+  pamietac projektujac asercje.
+
+## 3. Przykladowy kod
+```robotframework
+*** Settings ***
+Documentation     Przyklad Data-Driven Testing z uzyciem [Template].
+Library           Collections
+
+*** Test Cases ***
+Walidacja logowania dla roznych danych
+    [Template]    Sprawdz wynik logowania
+    login=admin      haslo=admin123     oczekiwany=SUKCES
+    login=admin      haslo=zlehaslo     oczekiwany=BLAD
+    login=${EMPTY}   haslo=admin123     oczekiwany=BLAD
+    login=admin      haslo=${EMPTY}     oczekiwany=BLAD
+    login=${EMPTY}   haslo=${EMPTY}     oczekiwany=BLAD
+
+*** Keywords ***
+Sprawdz wynik logowania
+    [Arguments]    ${login}    ${haslo}    ${oczekiwany}
+    ${wynik}=    Zaloguj    ${login}    ${haslo}
+    Should Be Equal    ${wynik}    ${oczekiwany}
+
+Zaloguj
+    [Arguments]    ${login}    ${haslo}
+    IF    "${login}" == "" or "${haslo}" == ""
+        RETURN    BLAD
+    END
+    IF    "${login}" == "admin" and "${haslo}" == "admin123"
+        RETURN    SUKCES
+    END
+    RETURN    BLAD
+```
+
+Przyklad z danymi z pliku CSV (wczytanie i iteracja przez `FOR`):
+```robotframework
+*** Settings ***
+Library    OperatingSystem
+Library    String
+
+*** Test Cases ***
+Test z danymi z pliku CSV
+    ${zawartosc}=    Get File    ${CURDIR}/dane_logowania.csv
+    @{wiersze}=      Split To Lines    ${zawartosc}
+    FOR    ${wiersz}    IN    @{wiersze}
+        @{dane}=    Split String    ${wiersz}    ,
+        Sprawdz wynik logowania    @{dane}
+    END
+```
+
+## 4. Najczestsze bledy
+- Wpisywanie danych testowych na sztywno wewnatrz Keywordu szablonowego
+  zamiast przekazywania ich jako argumenty - traci sie caly sens DDT.
+- Brak czytelnych nazw wierszy w Test Case z `[Template]` - w raporcie
+  widac wtedy tylko nieopisane, trudne do zidentyfikowania przypadki.
+- Mieszanie w jednym Template roznej liczby/kolejnosci argumentow w
+  poszczegolnych wierszach, co prowadzi do myloncych bledow o niezgodnej
+  liczbie parametrow.
+- Ignorowanie faktu, ze kazdy wiersz to osobny "test" w raporcie - przy
+  duzej liczbie danych log.html/report.html moze zrobic sie nieczytelny,
+  jesli nie pogrupuje sie danych sensownie (np. po tagach).
+- Brak walidacji formatu danych wejsciowych (np. z CSV) przed uzyciem ich
+  w Keywordzie - literowka w danych zewnetrznych powoduje trudny do
+  namierzenia falszywy blad testu.
+
+## 5. Ulepszenia z AI
+- Poproś AI o wygenerowanie kompletu przypadkow brzegowych (edge cases) do
+  tabeli `[Template]` na podstawie opisu reguly biznesowej (np. walidacja
+  formularza logowania czy rejestracji).
+- Wklej istniejacy zbior danych testowych (np. arkusz/CSV) i poproś AI o
+  przeksztalcenie go w gotowa tabele `[Template]` w skladni Robot Framework.
+- Wykorzystaj AI do wygenerowania danych syntetycznych (np. losowe adresy
+  email, numery telefonow, kombinacje pol) do zasilenia testow DDT.
+- Poproś AI o zaproponowanie brakujacych kombinacji danych (macierz
+  parametrow), ktore mogly zostac pominiete w reczne pisanej tabeli.
+- Uzyj AI do przejrzenia istniejacego zestawu duplikatow Test Casow i
+  zaproponowania ich konsolidacji w jeden Test Case z `[Template]`.
+
+## Zadanie na dzis
+Zamien trzy oddzielne, powtarzalne Test Case'y (np. testujace rejestracje
+uzytkownika z roznymi danymi wejsciowymi) na jeden Test Case korzystajacy z
+`[Template]`. Dodaj co najmniej 5 wierszy danych obejmujacych przypadki
+pozytywne i negatywne (np. puste pole, zly format email, za krotkie haslo),
+nadaj kazdemu wierszowi czytelna nazwe i uruchom test z flaga `--test`, aby
+sprawdzic, ze kazdy wiersz jest widoczny jako osobny przypadek w raporcie.
+
+================================================================================
