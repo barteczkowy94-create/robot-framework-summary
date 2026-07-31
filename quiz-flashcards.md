@@ -30,6 +30,36 @@
 
 ================================================================================
 
+## Dzien 7 - Quiz (czwartek, 2026-07-30) - RequestsLibrary do testow API
+
+1. Ktorego keywordu nalezy uzyc, aby wykonac zadanie GET w ramach wczesniej utworzonej sesji?
+   a) Get Request  b) GET On Session  c) Send GET  d) Open Session
+
+2. Do czego sluzy parametr `expected_status` w keywordach `*_On Session`?
+   a) Ustawia timeout zadania  b) Automatycznie weryfikuje kod odpowiedzi HTTP  c) Okresla format wysylanych danych  d) Nic nie robi, jest tylko dokumentacja
+
+3. Jak poprawnie odczytac dane JSON z obiektu `response` zwroconego przez RequestsLibrary?
+   a) `${response.data}`  b) `${response.json()}`  c) `${response.body}`  d) `Get Json    ${response}`
+
+4. Ktora biblioteka jest zwykle uzywana razem z RequestsLibrary do walidacji struktury odpowiedzi JSON (np. slownikow)?
+   a) String  b) OperatingSystem  c) Collections  d) DateTime
+
+5. Gdzie nalezy przechowywac tokeny API i dane logowania uzywane w testach?
+   a) Bezposrednio w pliku .robot jako literal  b) W zmiennych srodowiskowych lub bezpiecznym pliku konfiguracyjnym  c) W komentarzu przy tescie  d) W nazwie test case'u
+
+**Odpowiedzi:** 1-b, 2-b, 3-b, 4-c, 5-b
+
+## Dzien 7 - Fiszki
+
+- `Create Session` -> tworzy sesje HTTP z nazwa i adresem bazowym (base URL), uzywana pozniej w keywordach `*_On Session`
+- `GET/POST/PUT/DELETE On Session` -> wykonuja zadania HTTP w ramach istniejacej sesji, zamiast starszych `Get Request`/`Post Request`
+- `expected_status` -> parametr keywordu weryfikujacy kod odpowiedzi HTTP, zglasza czytelny blad przy niezgodnosci zamiast recznego sprawdzania
+- `${response.json()}` -> dostep do body odpowiedzi jako danych Pythona (dict/list); `${response.status_code}` -> kod HTTP
+- `Dictionary Should Contain Key` (Collections) -> walidacja obecnosci klucza w odpowiedzi JSON przed odczytem wartosci
+- Tokeny/API keys -> zawsze w zmiennych srodowiskowych/pliku konfiguracyjnym (`%{API_TOKEN}`), nigdy jako literal w pliku .robot
+
+================================================================================
+
 ## Tydzien 2 - Quiz (piatek, 2026-07-31) - Dni 2-8
 
 1. Ktory keyword z biblioteki BuiltIn sluzy do warunkowego przerwania testu
