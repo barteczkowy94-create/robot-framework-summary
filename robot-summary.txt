@@ -621,3 +621,86 @@ nadaj kazdemu wierszowi czytelna nazwe i uruchom test z flaga `--test`, aby
 sprawdzic, ze kazdy wiersz jest widoczny jako osobny przypadek w raporcie.
 
 ================================================================================
+# Dzien 9 (2026-08-01, sobota) - Tagowanie i selektywne uruchamianie testow
+
+## 1. Temat dnia
+Tagowanie testow ([Tags]) oraz selektywne uruchamianie ich przy pomocy flag
+`--include` / `--exclude` / `--test` / `--suite` w Robot Framework.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Tagi nadaje sie w [Tags] na poziomie Test Case lub globalnie przez
+  Force Tags/Default Tags w sekcji *** Settings ***.
+- Uzywaj krotkich, spojnych nazw tagow (np. smoke, regression, api, slow) -
+  ustal konwencje nazewnictwa dla calego zespolu i trzymaj sie jej.
+- Tagi mozna laczyc logicznie przy uruchamianiu: `--include tagA --exclude
+  tagB` albo wyrazenia typu `smokeANDapi`.
+- Warto tagowac testy wg priorytetu (critical/high/low), obszaru (login,
+  checkout) i typu (smoke, regression, slow) - to umozliwia elastyczne
+  odpalanie podzbiorow w CI/CD.
+- Unikaj tagow "na wyrost" bez sensu biznesowego - kazdy tag powinien
+  odpowiadac na pytanie "po co bede filtrowac tym tagiem".
+
+## 3. Przyklad kodu (.robot)
+```robotframework
+*** Settings ***
+Documentation     Przyklad tagowania testow logowania
+Force Tags        regression
+
+*** Test Cases ***
+Poprawne logowanie
+    [Documentation]    Test smoke - krytyczna sciezka logowania
+    [Tags]    smoke    critical    login
+    Log    Symulacja poprawnego logowania
+
+Logowanie z blednym haslem
+    [Tags]    negative    login
+    Log    Symulacja logowania z blednym haslem
+
+Logowanie - test wydajnosciowy
+    [Tags]    slow    performance
+    Log    Symulacja dlugotrwalego testu logowania
+```
+
+Uruchomienie tylko testow smoke:
+```bash
+robot --include smoke tests/
+```
+
+Uruchomienie regresji z pominieciem wolnych testow:
+```bash
+robot --include regression --exclude slow tests/
+```
+
+Uruchomienie po wyrazeniu logicznym (smoke ORAZ login):
+```bash
+robot --include smokeANDlogin tests/
+```
+
+## 4. Najczestsze bledy
+- Niespojne nazwy tagow (np. "Smoke", "smoke", "SMOKE-TEST" jako rozne
+  tagi) - RF traktuje je jako oddzielne wartosci, filtr nie zlapie wszystkich.
+  Robot Framework normalizuje wielkosc liter/spacje przy porownaniu tagow,
+  ale mieszanie konwencji (myslnik vs podkreslnik) i tak utrudnia utrzymanie.
+- Brak dokumentacji tagow - nikt w zespole nie wie co dany tag oznacza.
+- Tagowanie "na sztywno" pojedynczych testow zamiast uzycia Force
+  Tags/Default Tags dla calego pliku, gdy tag dotyczy calej suity.
+- Zbyt duza liczba unikalnych tagow bez planu - trudno potem filtrowac
+  sensowne podzbiory testow.
+- Mylenie --include/--exclude z selekcja po nazwie (--test, --suite) -
+  to inne mechanizmy i mozna je laczyc, ale trzeba rozumiec roznice.
+
+## 5. Ulepszenia z AI
+- Poproszenie Claude/Copilot o zaproponowanie spojnej konwencji nazewnictwa
+  tagow dla calego projektu na podstawie listy istniejacych testow.
+- Wklejenie pliku .robot i poproszenie AI o audyt tagow: wykrycie
+  duplikatow, literowek i niespojnosci (np. "smoke" vs "smoke-test").
+- Generowanie komend CI (np. dla GitHub Actions) z odpowiednia kombinacja
+  --include/--exclude na podstawie opisu "chce odpalac tylko smoke na PR,
+  a pelna regresje w nocy".
+- Automatyczne generowanie dokumentacji tagow (README/wiki) na podstawie
+  analizy uzytych tagow w calym repozytorium testowym.
+- Analiza logow z uruchomienia (log.html/output.xml) przez AI w celu
+  zaproponowania, ktore testy warto oznaczyc jako "slow" lub "flaky" na
+  podstawie czasu wykonania i historii wynikow.
+
+================================================================================
