@@ -704,3 +704,101 @@ robot --include smokeANDlogin tests/
   podstawie czasu wykonania i historii wynikow.
 
 ================================================================================
+# Dzien 10 (2026-08-02) - Resource files i modularizacja testow
+
+## 1. Temat dnia
+Pliki .resource (Resource files) oraz modularizacja projektu testowego - jak
+dzielic wspolne slowa kluczowe, zmienne i importy na osobne pliki, aby testy
+byly czytelne, ponownie uzywalne i latwe w utrzymaniu.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Wspolne slowa kluczowe i zmienne wydzielaj do plikow z rozszerzeniem
+  .resource (nie .robot) - jasno oddziela to "biblioteke" testowa od
+  wykonywalnych przypadkow testowych.
+- Importuj plik zasobow przez `Resource    sciezke/do/pliku.resource` w
+  sekcji *** Settings *** - sciezki podawaj wzgledem lokalizacji biedzacego
+  pliku (mozna uzyc `${CURDIR}` dla pewnosci niezaleznie od katalogu
+  uruchomienia).
+- Trzymaj strukture katalogow logicznie: np. `resources/` (keywordy wspolne),
+  `resources/pages/` (Page Object - lokalizatory i akcje per strona/ekran),
+  `tests/` (przypadki testowe), `data/` (dane testowe).
+- Jeden plik .resource powinien miec jedna odpowiedzialnosc (np.
+  `login_keywords.resource`, `api_common.resource`) - unikaj jednego
+  "worka" ze wszystkimi keywordami calego projektu.
+- Unikaj cyklicznych importow (plik A importuje B, B importuje A) - RF
+  zglosi blad parsowania; planuj hierarchie importow od ogolu do szczegolu.
+
+## 3. Przyklad kodu (.robot)
+Plik `resources/login_keywords.resource`:
+```robotframework
+*** Settings ***
+Documentation     Wspolne slowa kluczowe zwiazane z logowaniem.
+Library           Collections
+
+*** Variables ***
+${VALID_USER}        standard_user
+${VALID_PASSWORD}     secret_sekrit
+
+*** Keywords ***
+Zaloguj Uzytkownika
+    [Arguments]    ${login}=${VALID_USER}    ${haslo}=${VALID_PASSWORD}
+    Log    Logowanie jako: ${login}
+    Set Suite Variable    ${AKTUALNY_UZYTKOWNIK}    ${login}
+
+Uzytkownik Powinien Byc Zalogowany
+    Should Not Be Empty    ${AKTUALNY_UZYTKOWNIK}
+    Log    Zalogowany uzytkownik: ${AKTUALNY_UZYTKOWNIK}
+```
+
+Plik `tests/login_tests.robot`:
+```robotframework
+*** Settings ***
+Documentation     Testy logowania korzystajace z modulu resource.
+Resource          ${CURDIR}/../resources/login_keywords.resource
+
+*** Test Cases ***
+Poprawne logowanie standardowym uzytkownikiem
+    [Tags]    smoke    login
+    Zaloguj Uzytkownika
+    Uzytkownik Powinien Byc Zalogowany
+
+Logowanie innym uzytkownikiem
+    [Tags]    login
+    Zaloguj Uzytkownika    login=admin_user    haslo=admin_pass123
+    Uzytkownik Powinien Byc Zalogowany
+```
+
+## 4. Najczestsze bledy
+- Uzywanie rozszerzenia .robot dla plikow zasobow zamiast .resource - dziala,
+  ale myli czytelnikow (plik .robot sugeruje wykonywalne testy).
+- Sciezki wzgledne liczone od katalogu uruchomienia `robot`, a nie od
+  lokalizacji pliku - powoduje bledy "Import failed" przy uruchamianiu z
+  innego katalogu; lekarstwo to `${CURDIR}`.
+- Nadmierne "spłaszczanie" - jeden gigantyczny resource ze wszystkimi
+  keywordami projektu utrudnia znalezienie czegokolwiek i zwieksza ryzyko
+  konfliktow nazw.
+- Duplikowanie tych samych keywordow w kilku resource'ach zamiast wydzielenia
+  wspolnego, bardziej ogolnego pliku bazowego.
+- Brak Documentation w plikach .resource - kolejny czlonek zespolu nie wie,
+  do czego sluzy dany modul bez czytania calego kodu.
+
+## 5. Ulepszenia z AI
+- Poproszenie Claude/Copilot o zaproponowanie podzialu istniejacego,
+  rozroslego pliku .robot na osobne resource'y wedlug odpowiedzialnosci
+  (logowanie, koszyk, platnosci).
+- Wklejenie kilku plikow testowych i poproszenie AI o wykrycie duplikatow
+  keywordow, ktore mozna wyciagnac do wspolnego resource.
+- Generowanie szkieletu struktury katalogow projektu (resources/, tests/,
+  data/) na podstawie opisu aplikacji, ktora bedzie testowana.
+- Automatyczne generowanie Documentation dla plikow .resource na podstawie
+  analizy uzytych w nich Keywords.
+- Poproszenie AI o audyt importow (Resource) pod katem cyklicznych zaleznosci
+  lub nieuzywanych/zbednych importow w projekcie.
+
+## Zadanie na dzis
+Wydziel z dowolnego posiadanego pliku .robot (lub z przykladu powyzej) co
+najmniej dwa wspolne slowa kluczowe do osobnego pliku .resource, zaimportuj
+go w pliku testowym przez `Resource    ${CURDIR}/...` i uruchom test, aby
+sprawdzic, ze modularyzacja dziala poprawnie.
+
+================================================================================
