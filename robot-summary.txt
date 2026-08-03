@@ -802,3 +802,113 @@ go w pliku testowym przez `Resource    ${CURDIR}/...` i uruchom test, aby
 sprawdzic, ze modularyzacja dziala poprawnie.
 
 ================================================================================
+# Dzien 11 (2026-08-03) - Custom Keywords i tworzenie wlasnych bibliotek w Pythonie
+
+## 1. Temat dnia
+Tworzenie wlasnych slow kluczowych (Custom Keywords) - zarowno w plikach
+.robot/.resource, jak i jako pelnoprawne biblioteki napisane w Pythonie -
+gdy standardowe biblioteki nie wystarczaja do wyrazenia logiki testowej.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Custom Keyword w RF-owym .resource wystarcza, gdy logika to zlozenie
+  istniejacych keywordow; biblioteke w Pythonie pisz dopiero, gdy potrzebujesz
+  wlasnych obliczen, integracji z zewnetrznym API/SDK albo wydajnosci
+  niedostepnej w czystym RF.
+- Kazda klasa biblioteki w Pythonie powinna miec atrybut
+  `ROBOT_LIBRARY_SCOPE` ('GLOBAL', 'SUITE' lub 'TEST') - okresla on, jak
+  dlugo zyje instancja biblioteki i czy stan jest dzielony miedzy testami.
+- Metody publiczne klasy staja sie slowami kluczowymi automatycznie (nazwa
+  metody `zaloguj_uzytkownika` -> keyword `Zaloguj Uzytkownika`) - metody
+  pomocnicze, ktore NIE maja byc keywordem, poprzedzaj podkreslnikiem `_`.
+- Dokumentuj kazdy keyword docstringiem - trafia on wprost do log.html/
+  Libdoc i jest jedynym zrodlem wiedzy dla reszty zespolu bez czytania kodu.
+- Rzucaj wyjatki (`raise AssertionError(...)`) zamiast zwracac True/False -
+  RF traktuje kazdy wyjatek jako FAIL testu, co jest zgodne z konwencja
+  asercji w calym frameworku.
+
+## 3. Przyklad kodu
+Biblioteka Pythona `libraries/CalculatorLibrary.py`:
+```python
+from robot.api.deco import keyword, library
+
+
+@library(scope="TEST", auto_keywords=False)
+class CalculatorLibrary:
+    """Prosta biblioteka RF demonstrujaca wlasne slowa kluczowe."""
+
+    def __init__(self):
+        self._historia = []
+
+    @keyword("Dodaj Liczby")
+    def dodaj_liczby(self, a, b):
+        """Dodaje dwie liczby i zapisuje wynik w historii operacji."""
+        wynik = float(a) + float(b)
+        self._historia.append(wynik)
+        return wynik
+
+    @keyword("Ostatni Wynik Powinien Byc Rowny")
+    def ostatni_wynik_powinien_byc_rowny(self, oczekiwany):
+        if not self._historia:
+            raise AssertionError("Brak zapisanej historii operacji.")
+        ostatni = self._historia[-1]
+        if ostatni != float(oczekiwany):
+            raise AssertionError(
+                f"Oczekiwano {oczekiwany}, otrzymano {ostatni}"
+            )
+```
+
+Uzycie w pliku testowym `tests/calculator_tests.robot`:
+```robotframework
+*** Settings ***
+Documentation     Test wlasnej biblioteki Pythona z zestawem keywordow.
+Library           ${CURDIR}/../libraries/CalculatorLibrary.py
+
+*** Test Cases ***
+Dodawanie dwoch liczb dodatnich
+    [Tags]    unit    custom-library
+    Dodaj Liczby    3    4
+    Ostatni Wynik Powinien Byc Rowny    7
+
+*** Keywords ***
+Zaloguj I Zweryfikuj Naglowek
+    [Documentation]    Przyklad keyworda RF zlozonego z innych keywordow.
+    [Arguments]    ${login}
+    Log    Logowanie jako ${login}
+    Page Should Contain    Witaj, ${login}
+```
+
+## 4. Najczestsze bledy
+- Brak `ROBOT_LIBRARY_SCOPE` - domyslnie kazda instancja zyje tylko na czas
+  jednego testu (TEST), co bywa zaskoczeniem, gdy oczekuje sie stanu
+  wspoldzielonego w calym suite.
+- Zwracanie `False`/komunikatu bledu zamiast rzucenia wyjatku - test konczy
+  sie PASS mimo faktycznej porazki logicznej.
+- Nazywanie metod pomocniczych bez podkreslnika `_` - przypadkowo staja sie
+  publicznymi keywordami i zaśmiecaja liste dostepnych slow kluczowych.
+- Mieszanie logiki biznesowej z asercjami w jednym keywordzie - utrudnia to
+  ponowne uzycie (raz chcemy tylko pobrac wartosc, raz od razu ja zweryfikowac).
+- Brak testow jednostkowych dla samej biblioteki Pythona - bledy w keywordach
+  wychodza dopiero na duzych, kosztownych testach E2E.
+
+## 5. Ulepszenia z AI
+- Poproś Claude/Copilot o wygenerowanie szkieletu klasy biblioteki RF (z
+  `ROBOT_LIBRARY_SCOPE`, dekoratorem `@keyword`, docstringami) na podstawie
+  opisu potrzebnej funkcjonalnosci w jezyku naturalnym.
+- Wklej istniejacy, rozrosniety Custom Keyword napisany w .robot i poproś AI
+  o ocene, czy powinien zostac przepisany na biblioteke Pythona (np. ze
+  wzgledu na zlozonosc logiki lub potrzebe obslugi wyjatkow).
+- Uzyj AI do wygenerowania testow jednostkowych (pytest) dla wlasnej
+  biblioteki Pythona, niezaleznie od testow .robot, ktore z niej korzystaja.
+- Poproś o wygenerowanie dokumentacji Libdoc/README dla biblioteki na
+  podstawie kodu zrodlowego, wraz z przykladami uzycia kazdego keyworda.
+- Wykorzystaj AI do przegladu nazewnictwa keywordow pod katem spojnosci
+  (np. czy wszystkie asercje zaczynaja sie od "Powinien/Powinna Byc").
+
+## Zadanie na dzis
+Napisz prosta biblioteke Pythona z co najmniej dwoma slowami kluczowymi
+(jedno wykonujace operacje, drugie weryfikujace jej wynik przez rzucenie
+wyjatku przy niepowodzeniu), zaimportuj ja w pliku .robot przez
+`Library    ${CURDIR}/...` i uruchom test potwierdzajacy, ze oba keywordy
+dzialaja poprawnie.
+
+================================================================================
