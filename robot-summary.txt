@@ -912,3 +912,96 @@ wyjatku przy niepowodzeniu), zaimportuj ja w pliku .robot przez
 dzialaja poprawnie.
 
 ================================================================================
+# Dzien 12 (2026-08-04) - Raportowanie i logi (log.html, report.html)
+
+## 1. Temat dnia
+Jak Robot Framework generuje wyniki testow - roznica miedzy output.xml,
+log.html i report.html, sterowanie poziomem szczegolowosci logu oraz
+dolaczanie dodatkowych informacji (zrzuty ekranu, wlasne wpisy) do raportu.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- output.xml to zrodlo prawdy - zawiera wszystkie dane z przebiegu testow;
+  log.html i report.html sa generowane na jego podstawie (recznie przez
+  narzedzie `rebot`, albo automatycznie po kazdym uruchomieniu `robot`).
+- report.html to podsumowanie wysokiego poziomu (statystyki, tagi, PASS/FAIL
+  per suite) - log.html to szczegolowy, klikalny zapis kazdego kroku i
+  slowa kluczowego, wraz z argumentami i wartosciami zwracanymi.
+- Poziom logowania ustawiaj przez `--loglevel` (domyslnie INFO) - w CI
+  warto uzywac WARN/INFO, a szczegoly DEBUG/TRACE wlaczac tylko przy
+  diagnozowaniu konkretnego problemu, bo TRACE potrafi wygenerowac
+  ogromne pliki.
+- Do wlasnych wpisow w logu uzywaj `Log` / `Log To Console` z jawnym
+  poziomem (`Log    Wiadomosc    level=DEBUG`), a nie tylko domyslnego
+  INFO - ulatwia to filtrowanie logu po fakcie.
+- Nigdy nie loguj sekretow (hasel, tokenow) w postaci jawnej - RF domyslnie
+  nie maskuje wartosci; jesli trzeba, uzyj `Log    ${haslo}    level=NONE`
+  albo argumentu `--variable HASLO:*****` przy wywolaniu, ewentualnie
+  wlasnej logiki maskujacej w Custom Keywordzie.
+
+## 3. Przyklad kodu
+```robotframework
+*** Settings ***
+Documentation     Przyklad logowania wlasnych informacji i zrzutu ekranu.
+Library           OperatingSystem
+
+*** Test Cases ***
+Logowanie wlasnych wpisow do log.html
+    [Documentation]    Pokazuje rozne poziomy logowania i Log To Console.
+    [Tags]    reporting
+    Log    Rozpoczynam test logowania danych    level=INFO
+    Log    Szczegoly techniczne widoczne tylko przy --loglevel DEBUG    level=DEBUG
+    Log To Console    Ta linia trafia od razu na konsole, nie tylko do logu
+    Log Many    Wpis pierwszy    Wpis drugi    Wpis trzeci
+
+Zapis zrzutu przy niepowodzeniu
+    [Documentation]    Wymusza blad, aby pokazac wpis FAIL w log.html.
+    [Tags]    reporting
+    ${plik_istnieje}=    Run Keyword And Return Status
+    ...    File Should Exist    ${CURDIR}/brak_takiego_pliku.txt
+    Run Keyword If    not ${plik_istnieje}
+    ...    Log    Plik nie istnieje - oczekiwane w tym przykladzie    level=WARN
+    Should Be True    ${plik_istnieje}
+    ...    msg=Plik testowy powinien istniec przed dalszymi krokami
+```
+
+Przydatne polecenia CLI do pracy z wynikami (poza kodem .robot):
+```
+robot --loglevel DEBUG --outputdir results tests/
+rebot --merge --output merged.xml results/output1.xml results/output2.xml
+rebot --log log.html --report report.html --loglevel WARN results/output.xml
+```
+
+## 4. Najczestsze bledy
+- Ustawianie `--loglevel TRACE` na stale w CI - logi robia sie ogromne i
+  ciezkie do przegladania, a build spowalnia przez sam zapis na dysk.
+- Logowanie hasel/tokenow wprost w `Log` lub w argumentach keywordow -
+  trafiaja one do log.html w postaci jawnej i moga wyciec przez artefakty CI.
+- Mylenie report.html z log.html - szukanie szczegolow bledu w report.html,
+  gdzie jest tylko podsumowanie, zamiast w log.html.
+- Nieprzechowywanie output.xml jako artefaktu CI - bez niego nie da sie
+  pozniej wygenerowac log.html/report.html ani zmergowac wynikow przez rebot.
+- Ignorowanie kolorowych sekcji WARN/ERROR w konsoli podczas przebiegu -
+  test moze przejsc (PASS), a mimo to zawierac istotne ostrzezenia w logu.
+
+## 5. Ulepszenia z AI
+- Wklejenie fragmentu log.html (lub tresci bledu z konsoli) do Claude/
+  ChatGPT z prosba o wskazanie najbardziej prawdopodobnej przyczyny FAIL-a
+  na podstawie stack trace'u i argumentow keywordu.
+- Poproszenie AI o wygenerowanie czytelnego podsumowania z duzego
+  output.xml/report.html (np. "ktore suity maja najwiecej FAIL, jaki jest
+  sredni czas trwania testu") zamiast recznego przegladania.
+- Uzycie AI do zaproponowania miejsc w kodzie testowym, gdzie warto dodac
+  `Log`/`Log To Console` z konkretnym poziomem, aby ulatwic przyszle
+  debugowanie bez zasmiecania logu w trybie normalnym.
+- Poproszenie AI o przejrzenie testow pod katem logowania danych
+  wrazliwych (hasel, tokenow, PII) i zaproponowanie sposobu ich maskowania.
+- Wygenerowanie przez AI polecenia `rebot` do zmergowania wynikow z wielu
+  rownoleglych przebiegow (np. z Pabot) w jeden spojny log.html/report.html.
+
+## Zadanie na dzis
+Uruchom dowolny test z parametrem `--loglevel DEBUG`, dodaj do niego wlasny
+`Log` na poziomie DEBUG oraz `Log To Console`, a nastepnie porownaj, co
+widac w log.html przy `--loglevel INFO` a co dodatkowo pojawia sie przy
+`--loglevel DEBUG`.
+
+================================================================================
