@@ -1005,3 +1005,114 @@ widac w log.html przy `--loglevel INFO` a co dodatkowo pojawia sie przy
 `--loglevel DEBUG`.
 
 ================================================================================
+# Dzien 13 (2026-08-05) - Obsluga wyjatkow i Run Keyword And Expect Error
+
+## 1. Temat dnia
+Obsluga oczekiwanych bledow w Robot Framework - jak testowac scenariusze
+negatywne (np. walidacje, wyjatki API/aplikacji) przy pomocy keywordow
+`Run Keyword And Expect Error`, `Run Keyword And Ignore Error` oraz bloku
+`TRY/EXCEPT` (RF 5+), zamiast traktowac kazdy blad jako niepowodzenie testu.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- `Run Keyword And Expect Error` jest wlasciwym wyborem, gdy TEST MA
+  potwierdzic, ze dany keyword faktycznie rzuca oczekiwany blad - pierwszy
+  argument to wzorzec komunikatu bledu (mozna uzyc `*`/`glob` lub prefiksu
+  `EQUALS:`/`STARTS:`/`REGEXP:` dla precyzyjnego dopasowania).
+- `Run Keyword And Ignore Error` uzywaj tylko tam, gdzie blad NIE powinien
+  przerywac testu, ale nie chcesz go tez jawnie weryfikowac (np. opcjonalne
+  sprzatanie) - w przeciwienstwie do Expect Error, nie sprawdza tresci bledu.
+- Od RF 5 preferuj natywny blok `TRY ... EXCEPT ... ELSE ... FINALLY ... END`
+  zamiast starszych keywordow tam, gdzie potrzebna jest bardziej rozbudowana
+  logika (kilka warunkow bledu, dostep do wiadomosci przez `AS ${zmienna}`).
+- Nie "lykaj" bledow bez potrzeby - kazde uzycie Ignore Error/TRY-EXCEPT
+  powinno miec jasny powod biznesowy, w przeciwnym razie test przestaje
+  wykrywac prawdziwe regresje (falszywy PASS mimo realnej awarii).
+- Dopasowuj wzorzec bledu na tyle scisle, by test lapal wlasciwy wyjatek,
+  ale na tyle luzno (np. przez `*` na koncu), by drobna zmiana tresci
+  komunikatu (np. numer wiersza) nie psula testu bez potrzeby.
+
+## 3. Przykladowy kod
+```robotframework
+*** Settings ***
+Documentation     Przyklady obslugi oczekiwanych i nieoczekiwanych bledow.
+Library           Collections
+
+*** Test Cases ***
+Oczekiwany blad przy dzieleniu przez zero
+    [Documentation]    Weryfikuje, ze keyword rzuca wlasciwy, oczekiwany wyjatek.
+    [Tags]    exceptions
+    Run Keyword And Expect Error    ZeroDivisionError: *
+    ...    Podziel Liczby    10    0
+
+Ignorowanie bledu przy opcjonalnym sprzataniu
+    [Documentation]    Blad w kroku sprzatajacym nie powinien przerywac testu.
+    [Tags]    exceptions
+    Run Keyword And Ignore Error    Usun Plik Tymczasowy    ${CURDIR}/brak.txt
+    Log    Test kontynuowany niezaleznie od wyniku sprzatania
+
+Obsluga bledu przez TRY/EXCEPT (RF 5+)
+    [Documentation]    Nowoczesna skladnia obslugi wyjatkow z dostepem do tresci bledu.
+    [Tags]    exceptions
+    TRY
+        Podziel Liczby    10    0
+    EXCEPT    ZeroDivisionError: *    AS    ${blad}
+        Log    Zlapano oczekiwany blad: ${blad}
+    ELSE
+        Fail    Oczekiwano bledu dzielenia przez zero, ale go nie bylo
+    FINALLY
+        Log    Ten blok wykonuje sie zawsze, niezaleznie od wyniku
+    END
+
+*** Keywords ***
+Podziel Liczby
+    [Arguments]    ${a}    ${b}
+    ${wynik}=    Evaluate    ${a} / ${b}
+    RETURN    ${wynik}
+
+Usun Plik Tymczasowy
+    [Arguments]    ${sciezka}
+    OperatingSystem.Remove File    ${sciezka}
+```
+
+## 4. Najczestsze bledy
+- Nadmierne uzywanie `Run Keyword And Ignore Error` "na wszelki wypadek" -
+  test przechodzi (PASS) mimo realnej awarii, bo blad zostal po cichu
+  zignorowany zamiast zweryfikowany.
+- Zbyt scisle dopasowanie tresci bledu w `Run Keyword And Expect Error`
+  (caly komunikat 1:1) - test pada przy najmniejszej zmianie sformulowania
+  wyjatku, mimo ze logika biznesowa sie nie zmienila.
+- Brak weryfikacji TRESCI bledu, a jedynie faktu jego wystapienia - test
+  przejdzie takze wtedy, gdy rzucony zostanie zupelnie inny, niezwiazany
+  wyjatek niz oczekiwany.
+- Mieszanie starych keywordow (Run Keyword And Expect Error/Ignore Error)
+  z nowym TRY/EXCEPT bez wyraznego powodu w tym samym projekcie - utrudnia
+  to spojnosc i czytelnosc kodu dla calego zespolu.
+- Brak bloku FINALLY/teardownu przy krokach wymagajacych sprzatania (np.
+  zamkniecie polaczenia) wewnatrz TRY - w razie bledu zasob moze zostac
+  niezwolniony.
+
+## 5. Ulepszenia z AI
+- Poproś Claude/Copilot o wygenerowanie testow negatywnych weryfikujacych
+  konkretne, oczekiwane komunikaty bledow na podstawie opisu walidacji
+  biznesowej (np. "za krotkie haslo", "brak wymaganego pola").
+- Wklej stack trace/wyjatek z logu i poproś AI o zaproponowanie wlasciwego
+  wzorca dopasowania (`glob`, `REGEXP:`, `STARTS:`) do `Run Keyword And
+  Expect Error`, tak by nie byl ani zbyt scisly, ani zbyt luzny.
+- Uzyj AI do przeglądu istniejacych testow pod katem nadużywania `Run
+  Keyword And Ignore Error` i wskazania miejsc, gdzie blad powinien byc
+  jawnie zweryfikowany zamiast zignorowany.
+- Poproś o przepisanie starszej obslugi bledow (Run Keyword And Expect
+  Error) na nowoczesny blok TRY/EXCEPT/FINALLY zgodny z RF 5+.
+- Wykorzystaj AI do wygenerowania macierzy przypadkow bledowych (jakie
+  wyjatki moze rzucic dana funkcja/API) na podstawie opisu logiki lub
+  dokumentacji endpointu.
+
+## Zadanie na dzis
+Napisz Custom Keyword, ktory rzuca wyjatek przy niepoprawnych danych
+wejsciowych (np. pusty argument lub wartosc ujemna), a nastepnie napisz
+trzy testy: jeden weryfikujacy oczekiwany blad przez `Run Keyword And
+Expect Error` z dopasowaniem wzorca, jeden korzystajacy z bloku
+TRY/EXCEPT/ELSE/FINALLY z odczytem tresci bledu do zmiennej, oraz jeden
+pozytywny scenariusz, w ktorym blad NIE wystepuje.
+
+================================================================================
