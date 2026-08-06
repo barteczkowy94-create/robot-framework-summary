@@ -1116,3 +1116,100 @@ TRY/EXCEPT/ELSE/FINALLY z odczytem tresci bledu do zmiennej, oraz jeden
 pozytywny scenariusz, w ktorym blad NIE wystepuje.
 
 ================================================================================
+# Dzien 14 (2026-08-06) - Zmienne srodowiskowe i pliki konfiguracyjne
+
+## 1. Temat dnia
+Zmienne srodowiskowe (`%{ZMIENNA}`) oraz pliki konfiguracyjne (`--variablefile`,
+pliki `.py`/`.yaml`/`.robot` z argumentami) - jak oddzielic dane wrazliwe i
+srodowiskowo-zalezne (URL, loginy, tokeny, timeouty) od logiki testow.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Nigdy nie trzymaj hasel, tokenow ani sekretow jako literalow w plikach
+  .robot - odczytuj je przez `%{NAZWA_ZMIENNEJ}` z prawdziwych zmiennych
+  srodowiskowych (ustawianych np. w CI/CD jako "secrets").
+- Do wartosci ktore roznia sie miedzy srodowiskami (dev/staging/prod: base
+  URL, dane logowania, timeouty) uzywaj oddzielnych plikow zmiennych
+  (`--variablefile config_dev.py`, `--variablefile config_prod.yaml`)
+  zamiast twardego kodowania w suite'ach.
+- Keyword `Get Environment Variable` (OperatingSystem) pozwala odczytac
+  zmienna srodowiskowa z poziomu kodu testu, z opcjonalna wartoscia
+  domyslna, gdy zmienna nie jest ustawiona.
+- Preferuj pliki `.yaml`/`.py` jako zrodlo zmiennych zamiast prostych plikow
+  `.robot` - latwiej je parsowac programistycznie, walidowac i wersjonowac,
+  a `.py` pozwala budowac wartosci dynamicznie (np. losowe dane, sciezki).
+- Sekrety wstrzykuj wylacznie w czasie uruchomienia (`robot --variable
+  API_TOKEN:%{CI_TOKEN}` lub zmienna srodowiskowa odczytana przez keyword) -
+  nigdy nie commituj plikow z prawdziwymi hasłami do repozytorium (uzyj
+  `.gitignore` dla plikow `secrets_local.py`/`.env`).
+
+## 3. Przykladowy kod
+```robotframework
+*** Settings ***
+Documentation     Przyklad uzycia zmiennych srodowiskowych i pliku konfiguracyjnego.
+Library           OperatingSystem
+Variables         config/${ENV}.py
+
+*** Variables ***
+${DEFAULT_TIMEOUT}    10s
+
+*** Test Cases ***
+Logowanie z danymi z konfiguracji srodowiska
+    [Documentation]    Adres i dane logowania pochodza z pliku config/${ENV}.py,
+    ...    a token API ze zmiennej srodowiskowej ustawionej poza repozytorium.
+    [Tags]    config
+    ${token}=    Get Environment Variable    API_TOKEN    default=BRAK_TOKENU
+    Should Not Be Equal    ${token}    BRAK_TOKENU
+    ...    msg=Brak zmiennej srodowiskowej API_TOKEN - ustaw ja przed uruchomieniem testow
+    Log    Laczenie z ${BASE_URL} jako ${USERNAME}
+    Log    Timeout requestow: ${DEFAULT_TIMEOUT}
+```
+
+```python
+# config/dev.py - plik zmiennych dla srodowiska "dev"
+BASE_URL = "https://dev.example.com"
+USERNAME = "tester_dev"
+```
+
+```bash
+# Uruchomienie z podaniem srodowiska i wstrzyknieciem sekretu ze zmiennej systemowej
+export API_TOKEN="tajny-token-z-sejfu-cicd"
+robot --variable ENV:dev tests/
+```
+
+## 4. Najczestsze bledy
+- Trzymanie prawdziwych hasel/tokenow bezposrednio w sekcji `*** Variables
+  ***` lub w plikach `.robot` commitowanych do repozytorium.
+- Brak wartosci domyslnej/walidacji przy `Get Environment Variable` - test
+  konczy sie niejasnym bledem zamiast czytelnego komunikatu "brak zmiennej
+  X, ustaw ja przed uruchomieniem".
+- Twarde zakodowanie adresu URL/srodowiska w testach, przez co przelaczenie
+  miedzy dev/staging/prod wymaga recznej edycji wielu plikow zamiast jednej
+  flagi `--variablefile`/`--variable ENV:...`.
+- Mieszanie wielu zrodel tej samej zmiennej (raz z CLI, raz z pliku, raz na
+  sztywno w kodzie) bez jasnej hierarchii - trudno przewidziec, ktora
+  wartosc "wygra" podczas uruchomienia.
+- Brak pliku `.gitignore` dla lokalnych plikow z sekretami (`secrets_local.py`,
+  `.env`), co grozi przypadkowym wypchnieciem danych wrazliwych do repo.
+
+## 5. Ulepszenia z AI
+- Poproś AI o wygenerowanie szablonu plikow konfiguracyjnych dla kilku
+  srodowisk (dev/staging/prod) na podstawie listy potrzebnych zmiennych.
+- Wklej istniejacy suite z hardcodowanymi danymi i poproś o refaktoryzacje -
+  wyodrebnienie sekretow/adresow do zmiennych srodowiskowych i pliku
+  konfiguracyjnego.
+- Uzyj AI do wygenerowania checklisty bezpieczenstwa (co NIE powinno trafic
+  do repozytorium: klucze API, hasla, tokeny) i skonfigurowania `.gitignore`.
+- Poproś o wygenerowanie dokumentacji projektu opisujacej, jakie zmienne
+  srodowiskowe sa wymagane do uruchomienia testow lokalnie i w CI/CD.
+- Wykorzystaj AI do przegladu pipeline'u CI/CD pod katem bezpiecznego
+  przekazywania sekretow (np. jako maskowane "secrets", a nie zmienne
+  jawne w logach).
+
+## Zadanie na dzis
+Stworz plik `config/dev.py` z przykladowymi zmiennymi (`BASE_URL`,
+`USERNAME`), zaimportuj go w suite przez `Variables`, a nastepnie napisz
+test odczytujacy dodatkowa zmienna srodowiskowa (np. `API_TOKEN`) przez
+`Get Environment Variable` z wartoscia domyslna i jawna walidacja jej
+obecnosci przed uzyciem w tescie.
+
+================================================================================
