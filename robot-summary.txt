@@ -1213,3 +1213,101 @@ test odczytujacy dodatkowa zmienna srodowiskowa (np. `API_TOKEN`) przez
 obecnosci przed uzyciem w tescie.
 
 ================================================================================
+
+# Dzien 15 (2026-08-07) - RPA z Robot Framework
+
+## 1. Temat dnia
+Robot Framework nie sluzy wylacznie do testowania - to takze popularny silnik
+do **RPA (Robotic Process Automation)**. Do automatyzacji procesow biznesowych
+uzywa sie sekcji `*** Tasks ***` (zamiast `*** Test Cases ***`) oraz ekosystemu
+bibliotek **rpaframework** (RPA.Excel.Files, RPA.Browser.Selenium, RPA.PDF,
+RPA.Email, RPA.Cloud.AWS, RPA.Desktop i inne).
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Uzywaj sekcji `*** Tasks ***` zamiast `*** Test Cases ***`, gdy plik opisuje
+  proces biznesowy uruchamiany bez nadzoru (unattended), a nie test - RF
+  traktuje je technicznie tak samo, ale semantyka jest inna (proces vs test).
+- Projektuj procesy jako **idempotentne i wznawialne** - jesli proces padnie
+  w polowie (np. po przetworzeniu 50 z 200 rekordow), ponowne uruchomienie nie
+  powinno zdublowac juz wykonanej pracy (np. checkpoint w pliku/bazie).
+- Kazdy krok procesu obudowuj obsluga bledow (`Run Keyword And Ignore Error`,
+  `TRY/EXCEPT`), zeby blad na jednym rekordzie (np. jednej fakturze) nie
+  przerywal calego batcha - loguj blad i przechodz do kolejnego elementu.
+- Konfiguruj powiadomienia o niepowodzeniach (e-mail, Teams/Slack) dla
+  procesow uruchamianych automatycznie w tle - nikt nie sledzi ich na zywo,
+  wiec system musi sam zglosic problem.
+- Trzymaj konfiguracje srodowiska (sciezki, dane logowania, katalogi wejscia/
+  wyjscia) w `robot.yaml`/plikach zmiennych, a nie na sztywno w kodzie -
+  proces musi dzialac identycznie na innej maszynie/serwerze.
+
+## 3. Przyklad kodu (.robot)
+```robotframework
+*** Settings ***
+Documentation     Proces RPA: przetwarzanie zamowien z pliku Excel.
+Library           RPA.Excel.Files
+Library           RPA.Robocorp.Vault
+Library           Collections
+
+*** Variables ***
+${ORDERS_FILE}    ${CURDIR}/orders.xlsx
+${REPORT_FILE}    ${OUTPUT_DIR}/przetworzone_zamowienia.csv
+
+*** Tasks ***
+Przetworz zamowienia z pliku Excel
+    [Documentation]    Odczytuje zamowienia, przetwarza kazde niezaleznie
+    ...    i loguje wynik, tak by blad jednego wiersza nie przerwal calosci.
+    Open Workbook    ${ORDERS_FILE}
+    @{orders}=    Read Worksheet As Table    header=True
+    Close Workbook
+    FOR    ${order}    IN    @{orders}
+        ${status}    ${error}=    Run Keyword And Ignore Error
+        ...    Przetworz Pojedyncze Zamowienie    ${order}
+        IF    '${status}' == 'FAIL'
+            Log    Blad przy zamowieniu ${order}[id]: ${error}    level=WARN
+        END
+    END
+
+*** Keywords ***
+Przetworz Pojedyncze Zamowienie
+    [Arguments]    ${order}
+    Should Not Be Empty    ${order}[id]    msg=Brak ID zamowienia w wierszu
+    Log    Przetwarzanie zamowienia ${order}[id] dla klienta ${order}[klient]
+    # tutaj logika biznesowa: wywolanie API, zapis do systemu itp.
+```
+
+## 4. Najczestsze bledy
+- Traktowanie procesu RPA jak zwyklego testu - brak logiki ponawiania
+  (retry) i obslugi czesciowego niepowodzenia, przez co jeden zly rekord
+  wywraca caly batch danych produkcyjnych.
+- Brak checkpointow/idempotencji - ponowne uruchomienie po awarii przetwarza
+  od nowa juz wykonane operacje (np. wysyla duplikat maila lub platnosci).
+- Twarde kodowanie sciezek do plikow (`C:\Users\Jan\Desktop\...`) zamiast
+  konfigurowalnych zmiennych srodowiskowych/`robot.yaml` - proces dziala
+  tylko na jednej maszynie.
+- Brak sprzatania zasobow przy bledzie (niezamkniety Excel, otwarta
+  przegladarka, zablokowany plik) - kolejne uruchomienie procesu sie wywraca.
+- Brak powiadomien o awarii dla procesow bez nadzoru - nikt nie wie, ze
+  proces od trzech dni konczy sie bledem, dopoki ktos recznie nie sprawdzi.
+
+## 5. Ulepszenia z AI
+- Poproś AI o wygenerowanie szkieletu obslugi bledow (retry + logowanie +
+  powiadomienie) dla istniejacego procesu RPA na podstawie opisu kroku.
+- Wklej surowa strukture pliku Excel/CSV i poproś o wygenerowanie keywordu
+  mapujacego kolumny na zmienne oraz walidacji brakujacych danych.
+- Uzyj AI do zaprojektowania mechanizmu checkpointow/idempotencji (np. "jak
+  zapisywac postep przetwarzania, by bezpiecznie wznowic po awarii").
+- Poproś o wygenerowanie szablonu powiadomienia e-mail/Teams o bledzie
+  procesu, zawierajacego id rekordu, tresc bledu i link do logow.
+- Wykorzystaj AI do przegladu logow (output.xml/log.html) po nieudanym
+  uruchomieniu produkcyjnym i podsumowania, ktore rekordy sie nie udaly
+  i jaka byla najbardziej prawdopodobna przyczyna.
+
+## Zadanie na dzis
+Napisz proces RPA (`*** Tasks ***`) czytajacy liste "zamowien" z prostej
+listy slownikow (bez realnego pliku Excel - mozesz uzyc `Create Dictionary`/
+`Create List` w `*** Variables ***` lub `[Setup]`), ktory dla kazdego wpisu
+uruchamia keyword przetwarzajacy zamowienie przez `Run Keyword And Ignore
+Error`, loguje sukces/blad kazdego wiersza, a na koniec wypisuje podsumowanie
+(ile zamowien udanych, ile nieudanych).
+
+================================================================================

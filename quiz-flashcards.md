@@ -119,3 +119,68 @@
 
 ================================================================================
 
+## Tydzien 3 - Quiz (piatek, 2026-08-07) - Dni 9-15
+
+1. Ktorej flagi uzyjesz, aby uruchomic tylko testy oznaczone tagiem "smoke"?
+   a) `--tag smoke`  b) `--include smoke`  c) `--only smoke`  d) `--run smoke`
+
+2. Do czego sluzy plik typu Resource (`.resource`/`.robot` importowany przez
+   `Resource`)?
+   a) Przechowuje tylko dane testowe w formacie CSV  b) Grupuje wspoldzielone
+      keywordy/zmienne do wielu suit testowych  c) Zastepuje sekcje
+      *** Settings ***  d) Sluzy wylacznie do konfiguracji CI/CD
+
+3. Jak w Pythonie tworzy sie wlasny keyword do uzycia w Robot Framework
+   (klasyczne podejscie z biblioteka jako klasa)?
+   a) Kazda publiczna metoda klasy staje sie automatycznie keywordem
+   b) Trzeba recznie edytowac plik .robot  c) Tylko przez dekorator
+      @task  d) Nie da sie tworzyc wlasnych bibliotek w Pythonie
+
+4. Ktory plik generowany przez Robot Framework zawiera pelny, przeszukiwalny
+   log z krokow kazdego testu (wlacznie ze zmiennymi i wywolaniami)?
+   a) output.xml  b) report.html  c) log.html  d) result.json
+
+5. Ktory keyword BuiltIn pozwala zweryfikowac, ze dany keyword zglasza
+   oczekiwany blad, bez przerywania calego testu?
+   a) Should Raise  b) Run Keyword And Expect Error  c) Catch Error
+   d) Expect Failure
+
+6. Jak w pliku .robot odczytuje sie zmienna srodowiskowa systemu operacyjnego?
+   a) `${ZMIENNA}`  b) `%{ZMIENNA}`  c) `&{ZMIENNA}`  d) `@{ZMIENNA}`
+
+7. Czym proces RPA (`*** Tasks ***`) rozni sie w podejsciu od klasycznego
+   testu (`*** Test Cases ***`)?
+   a) Technicznie RF wymaga innej skladni  b) Proces RPA powinien byc
+      odporny na czesciowe bledy (obsluga per-rekord) i dzialac bez
+      nadzoru, podczas gdy test ma jednoznacznie zdac/nie zdac  c) Tasks
+      nie moga korzystac z bibliotek zewnetrznych  d) Nie ma zadnej roznicy
+
+8. Ktore podejscie jest najbezpieczniejsze dla procesu RPA przetwarzajacego
+   wiele rekordow (np. zamowien), gdy jeden rekord ma bledne dane?
+   a) Przerwac caly proces przez Fatal Error  b) Zignorowac blad bez
+      logowania i kontynuowac  c) Obsluzyc blad per-rekord (np. Run Keyword
+      And Ignore Error), zalogowac go i przetwarzac dalej pozostale rekordy
+   d) Zrestartowac caly komputer
+
+**Odpowiedzi:** 1-b, 2-b, 3-a, 4-c, 5-b, 6-b, 7-b, 8-c
+
+## Tydzien 3 - Fiszki
+
+- `--include`/`--exclude` -> selektywne uruchamianie testow po tagach
+  ([Tags], Force Tags/Default Tags)
+- Resource file (`Resource`) -> wspoldzielone keywordy/zmienne dla wielu
+  suit; modularizacja zamiast kopiowania kodu
+- Custom Keyword w Pythonie -> publiczna metoda klasy biblioteki staje sie
+  keywordem widocznym w .robot po `Library MojaBiblioteka.py`
+- log.html -> szczegolowy, przeszukiwalny log kazdego kroku testu;
+  report.html -> zbiorcze podsumowanie wynikow calego przebiegu
+- `Run Keyword And Expect Error` -> weryfikuje, ze keyword zglasza
+  konkretny, oczekiwany blad, bez przerywania testu
+- `%{ZMIENNA}` -> odczyt zmiennej srodowiskowej systemu; `--variablefile` ->
+  wstrzykniecie zmiennych z pliku .py/.yaml zaleznych od srodowiska
+- RPA (`*** Tasks ***`) -> automatyzacja procesow biznesowych bez nadzoru;
+  wymaga obslugi bledow per-rekord, idempotencji i powiadomien o awarii
+- rpaframework -> ekosystem bibliotek RPA dla Robot Framework (RPA.Excel.Files,
+  RPA.Browser.Selenium, RPA.PDF, RPA.Email i inne)
+
+================================================================================
