@@ -1213,3 +1213,112 @@ test odczytujacy dodatkowa zmienna srodowiskowa (np. `API_TOKEN`) przez
 obecnosci przed uzyciem w tescie.
 
 ================================================================================
+# Dzien 15 (2026-08-08, sobota) - RPA z Robot Framework
+
+## 1. Temat dnia
+Robot Framework nie sluzy tylko do testowania - dzieki sekcji `*** Tasks ***`
+oraz bibliotece `rpaframework` mozna nim tworzyc procesy RPA (Robotic Process
+Automation): automatyzacje biznesowe dzialajace bez nadzoru czlowieka, np.
+przetwarzanie plikow Excel, wysylka maili, obsluga stron webowych czy API.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Uzywaj sekcji `*** Tasks ***` zamiast `*** Test Cases ***`, gdy plik
+  opisuje proces biznesowy, a nie test - RF automatycznie przelacza sie
+  w tryb RPA (terminologia "Task" zamiast "Test" w raportach); pliku NIE
+  wolno mieszac obu sekcji naraz.
+- Korzystaj z bibliotek `rpaframework` (np. `RPA.Excel.Files`, `RPA.Tables`,
+  `RPA.HTTP`, `RPA.FileSystem`, `RPA.Email.ImapSmtp`, `RPA.Browser.Selenium`)
+  zamiast pisac integracje od zera - pokrywaja najczestsze potrzeby RPA
+  (pliki biurowe, poczta, PDF, chmura).
+- Procesy RPA dzialaja bez nadzoru - kazdy krok, ktory moze zawiesc (odczyt
+  pliku, request HTTP, logowanie), obudowuj blokiem `TRY/EXCEPT`, aby
+  pojedynczy blad nie przerwal calego batcha, tylko pozwolil kontynuowac
+  przetwarzanie kolejnych elementow (np. kolejnych wierszy Excela).
+- Loguj kazdy istotny krok procesu (`Log To Console`, `Log`) - w RPA nikt
+  nie obserwuje wykonania na zywo, wiec log.html/report.html to jedyne
+  zrodlo prawdy przy diagnozowaniu bledow produkcyjnych.
+- Dane wrazliwe (loginy, hasla, klucze API) trzymaj w sejfie sekretow
+  (np. `RPA.Robocorp.Vault`) lub zmiennych srodowiskowych - nigdy w kodzie
+  procesu, ktory czesto trafia do wspolnego repozytorium/orkiestratora.
+
+## 3. Przykladowy kod
+```robotframework
+*** Settings ***
+Documentation     Proces RPA: wczytanie zamowien z Excela, przetworzenie i eksport do CSV.
+Library           RPA.Excel.Files
+Library           RPA.Tables
+Library           RPA.FileSystem
+
+*** Variables ***
+${INPUT_FILE}     ${CURDIR}${/}dane${/}zamowienia.xlsx
+${OUTPUT_FILE}    ${CURDIR}${/}output${/}duze_zamowienia.csv
+${PROG_KWOTY}     1000
+
+*** Tasks ***
+Przetworz zamowienia z pliku Excel
+    [Documentation]    Filtruje zamowienia powyzej progu kwotowego i zapisuje wynik do CSV.
+    TRY
+        Open Workbook    ${INPUT_FILE}
+        ${zamowienia}=    Read Worksheet As Table    header=${TRUE}
+    EXCEPT    AS    ${blad}
+        Log To Console    Nie udalo sie wczytac pliku ${INPUT_FILE}: ${blad}
+        RETURN
+    FINALLY
+        Close Workbook
+    END
+
+    ${duze_zamowienia}=    Filter Table By Column
+    ...    ${zamowienia}    Kwota    >    ${PROG_KWOTY}
+    Create File    ${OUTPUT_FILE}
+    Export Table To CSV Doc    ${duze_zamowienia}    ${OUTPUT_FILE}
+    Log To Console    Zapisano ${duze_zamowienia.row_count} zamowien do ${OUTPUT_FILE}
+```
+
+```bash
+# Uruchomienie procesu RPA (RF automatycznie wykrywa tryb po sekcji *** Tasks ***)
+robot --outputdir wyniki tasks/przetworz_zamowienia.robot
+
+# Wymuszenie trybu RPA jawna flaga (przydatne przy mieszanych projektach)
+robot --rpa tasks/przetworz_zamowienia.robot
+```
+
+## 4. Najczestsze bledy
+- Mieszanie `*** Test Cases ***` i `*** Tasks ***` w jednym pliku .robot -
+  Robot Framework dopuszcza tylko jeden typ sekcji na plik.
+- Brak obslugi bledow w krokach zaleznych od zewnetrznych zasobow (plik,
+  strona, API) - jeden niedostepny plik przerywa caly batch zamiast
+  przejsc do kolejnego rekordu z odpowiednim logiem.
+- Zbyt skape logowanie kroków procesu - przy awarii na produkcji (bez
+  mozliwosci podejrzenia wykonania na zywo) trudno ustalic, na ktorym
+  etapie i dlaczego proces sie zatrzymal.
+- Trzymanie hasel/kluczy API wprost w kodzie procesu lub w plikach
+  konfiguracyjnych commitowanych do repo, zamiast w sejfie sekretow.
+- Traktowanie RPA jak zwyklego testu (jeden `Fail` konczy caly przebieg)
+  zamiast projektowania procesu tak, by kontynuowal dzialanie mimo
+  pojedynczych bledow tam, gdzie logika biznesowa na to pozwala.
+
+## 5. Ulepszenia z AI
+- Poproś AI o wygenerowanie szkieletu `*** Tasks ***` na podstawie opisu
+  procesu biznesowego w jezyku naturalnym (np. "wczytaj Excela, odfiltruj
+  wiersze, wyslij mailem raport").
+- Wklej nazwy kolumn z rzeczywistego pliku Excel/CSV i poproś AI o
+  wygenerowanie keywordow `RPA.Tables`/`RPA.Excel.Files` do ich filtrowania
+  i walidacji.
+- Uzyj AI do zaprojektowania strategii obslugi bledow (TRY/EXCEPT, retry,
+  kontynuacja mimo bledu pojedynczego rekordu) dla procesu dzialajacego
+  bez nadzoru.
+- Poproś o wygenerowanie pliku `robot.yaml`/`conda.yaml` pod wdrozenie
+  procesu w orkiestratorze (np. Robocorp/Sema4.ai) na podstawie listy
+  uzywanych bibliotek.
+- Wykorzystaj AI do przegladu logow z nieudanego przebiegu RPA i
+  zaproponowania miejsca, w ktorym warto dodac dodatkowe logowanie lub
+  blok TRY/EXCEPT.
+
+## Zadanie na dzis
+Stworz plik `.robot` z sekcja `*** Tasks ***` (nie `Test Cases`), ktory
+przy pomocy `RPA.Excel.Files`/`RPA.Tables` wczytuje przykladowy plik Excel,
+filtruje wiersze wedlug wybranej kolumny i zapisuje wynik do CSV. Obuduj
+odczyt pliku blokiem `TRY/EXCEPT/FINALLY`, tak by blad odczytu byl
+zalogowany, a nie przerywal calego procesu w nieczytelny sposob.
+
+================================================================================

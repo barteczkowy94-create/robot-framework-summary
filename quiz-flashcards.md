@@ -119,3 +119,69 @@
 
 ================================================================================
 
+## Tydzien 3 - Quiz (sobota, 2026-08-08) - Dni 9-15
+
+1. Ktora flaga CLI uruchamia testy oznaczone konkretnym tagiem?
+   a) `--tagname`  b) `--include`  c) `--select`  d) `--filter`
+
+2. Do czego sluza pliki Resource (`.resource`/`.robot` z `Resource`)?
+   a) Do przechowywania wynikow testow  b) Do wspoldzielenia keywordow i
+      zmiennych miedzy wieloma suitami  c) Do konfiguracji CI/CD  d) Tylko
+      do przechowywania danych testowych
+
+3. Jak Robot Framework rozpoznaje wlasny keyword w bibliotece Pythonowej
+   zaimportowanej przez `Library`?
+   a) Musi dziedziczyc po klasie `RobotLibrary`  b) Wystarczy publiczna
+      metoda/funkcja w klasie lub module `.py`  c) Musi miec rozszerzenie
+      `.rflib`  d) Musi byc napisana w Javie
+
+4. Ktory plik generowany po uruchomieniu testow zawiera szczegolowy,
+   krok-po-kroku zapis wykonania (przydatny do debugowania)?
+   a) `output.xml`  b) `report.html`  c) `log.html`  d) `summary.txt`
+
+5. Ktory keyword sprawdza, ze dany keyword rzuca OKRESLONY, oczekiwany blad?
+   a) `Run Keyword And Ignore Error`  b) `Run Keyword And Expect Error`
+   c) `Fail`  d) `Should Be Equal`
+
+6. Skad NALEZY pobierac sekrety (hasla, tokeny API) uzywane w testach?
+   a) Z literalow w pliku `.robot`  b) Ze zmiennych srodowiskowych/sejfu
+      sekretow, nigdy z kodu commitowanego do repo  c) Z komentarzy w
+      kodzie  d) Z nazwy test case'u
+
+7. Jaka sekcja pliku `.robot` sluzy do definiowania procesow RPA zamiast
+   testow?
+   a) `*** Test Cases ***`  b) `*** Tasks ***`  c) `*** Processes ***`
+   d) `*** Robots ***`
+
+8. Dlaczego w procesie RPA warto obudowac ryzykowny krok blokiem
+   TRY/EXCEPT zamiast pozwolic, by caly przebieg zakonczyl sie bledem?
+   a) Bo TRY/EXCEPT jest szybszy obliczeniowo  b) Aby pojedynczy blad (np.
+      jeden zly rekord) nie przerywal calego, dzialajacego bez nadzoru
+      procesu  c) Bo `Fail` nie istnieje w trybie RPA  d) Nie ma to
+      znaczenia, oba podejscia sa rownowazne
+
+**Odpowiedzi:** 1-b, 2-b, 3-b, 4-c, 5-b, 6-b, 7-b, 8-b
+
+## Tydzien 3 - Fiszki
+
+- `--include`/`--exclude` -> selektywne uruchamianie testow po tagach
+  (`[Tags]`) bez modyfikacji kodu testow
+- Resource file -> plik `.resource`/`.robot` importowany przez `Resource`,
+  wspoldzieli keywordy/zmienne miedzy suitami (modularizacja)
+- Custom Keyword w Pythonie -> zwykla klasa/funkcje w pliku `.py`
+  zaimportowane przez `Library`, kazda publiczna metoda staje sie keywordem
+- `log.html` -> szczegolowy log krok-po-kroku (debugowanie); `report.html`
+  -> podsumowanie wynikow; `output.xml` -> surowe dane maszynowe
+- `Run Keyword And Expect Error` -> weryfikuje TRESC oczekiwanego bledu;
+  `Run Keyword And Ignore Error` -> tylko ignoruje blad bez weryfikacji
+- TRY/EXCEPT/ELSE/FINALLY (RF 5+) -> nowoczesna obsluga wyjatkow z
+  dostepem do tresci bledu przez `AS ${zmienna}`
+- Zmienne srodowiskowe (`%{ZMIENNA}`) i `--variablefile` -> oddzielaja
+  sekrety/dane srodowiskowe (dev/staging/prod) od kodu testow
+- `*** Tasks ***` -> sekcja RPA (zamiast `*** Test Cases ***`); nie mozna
+  mieszac obu typow sekcji w jednym pliku
+- rpaframework (`RPA.Excel.Files`, `RPA.Tables`, `RPA.HTTP` itd.) ->
+  gotowe biblioteki do automatyzacji procesow biznesowych (RPA)
+
+================================================================================
+
