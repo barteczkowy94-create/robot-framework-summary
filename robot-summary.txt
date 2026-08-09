@@ -1322,3 +1322,123 @@ odczyt pliku blokiem `TRY/EXCEPT/FINALLY`, tak by blad odczytu byl
 zalogowany, a nie przerywal calego procesu w nieczytelny sposob.
 
 ================================================================================
+# Dzien 16 (2026-08-09, niedziela) - Dobre praktyki (Page Object Pattern, nazewnictwo, struktura projektu)
+
+## 1. Temat dnia
+Organizacja projektu testow Robot Framework tak, by rosl w sposob czytelny
+i latwy w utrzymaniu: wzorzec Page Object dla testow webowych, spojne
+nazewnictwo testow/keywordow oraz przejrzysta struktura katalogow.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Oddzielaj warstwy: pliki `.robot` z Test Cases opisuja CO ma byc
+  sprawdzone (jezyk biznesowy), pliki `.resource` z keywordami "strony"
+  opisuja JAK to zrobic (locatory, kliknięcia) - test nigdy nie powinien
+  zawierac surowego locatora (np. `id=submit-btn`).
+- Jeden plik `.resource` = jedna strona/komponent aplikacji (Page Object) -
+  np. `pages/login_page.resource`, `pages/dashboard_page.resource` -
+  zmiana UI danej strony wymaga edycji tylko jednego pliku.
+- Stosuj spojna konwencje nazewnicza: Test Cases w jezyku biznesowym
+  ("Uzytkownik Loguje Sie Poprawnymi Danymi"), keywordy akcji w formie
+  czasownikowej ("Wprowadz Dane Logowania"), keywordy asercji zaczynaj od
+  "Powinien/Powinna Byc" ("Strona Glowna Powinna Byc Widoczna").
+- Struktura katalogow oddziela odpowiedzialnosci, np.:
+  `tests/` (przypadki testowe), `resources/pages/` (Page Objects),
+  `resources/keywords/` (keywordy wspoldzielone), `libraries/` (biblioteki
+  Pythona), `variables/` (dane/konfiguracja), `results/` (output RF).
+- Trzymaj locatory jako zmienne w sekcji `*** Variables ***` danego Page
+  Objectu (np. `${LOGIN_BUTTON}    id=submit-btn`), a nie wprost w
+  wywolaniach keywordow - jedna zmiana ID elementu = jedna linia do edycji.
+
+## 3. Przyklad kodu
+Page Object `resources/pages/login_page.resource`:
+```robotframework
+*** Settings ***
+Library           Browser
+
+*** Variables ***
+${USERNAME_INPUT}    id=username
+${PASSWORD_INPUT}    id=password
+${LOGIN_BUTTON}       id=submit-btn
+${WELCOME_HEADER}     css=h1.welcome
+
+*** Keywords ***
+Wprowadz Dane Logowania
+    [Documentation]    Wypelnia formularz logowania podanymi danymi.
+    [Arguments]    ${login}    ${haslo}
+    Fill Text    ${USERNAME_INPUT}    ${login}
+    Fill Text    ${PASSWORD_INPUT}    ${haslo}
+    Click    ${LOGIN_BUTTON}
+
+Strona Glowna Powinna Byc Widoczna
+    [Documentation]    Weryfikuje, ze po zalogowaniu widoczny jest naglowek powitalny.
+    Get Text    ${WELCOME_HEADER}    ==    Witaj ponownie!
+```
+
+Test korzystajacy z Page Objectu `tests/login.robot`:
+```robotframework
+*** Settings ***
+Documentation     Testy logowania oparte o wzorzec Page Object.
+Resource          ../resources/pages/login_page.resource
+Suite Setup       Open Browser    https://example.test/login    chromium
+
+*** Test Cases ***
+Uzytkownik Loguje Sie Poprawnymi Danymi
+    [Tags]    smoke    login
+    Wprowadz Dane Logowania    jan.kowalski    TajneHaslo123
+    Strona Glowna Powinna Byc Widoczna
+```
+
+Przykladowa struktura katalogow projektu:
+```text
+projekt-testow/
+├── tests/
+│   └── login.robot
+├── resources/
+│   ├── pages/
+│   │   └── login_page.resource
+│   └── keywords/
+│       └── common.resource
+├── libraries/
+│   └── CustomLibrary.py
+├── variables/
+│   └── env_dev.py
+└── results/
+```
+
+## 4. Najczestsze bledy
+- Wpisywanie locatorow bezposrednio w Test Cases zamiast w Page Objectach -
+  jedna zmiana w UI wymusza edycje wielu plikow testowych naraz.
+- Nazwy testow techniczne zamiast biznesowych (np. "Test 1", "TC_LOGIN_02")
+  - raport z takiego przebiegu nic nie mowi osobie spoza zespolu QA.
+  - "Uzytkownik Loguje Sie Poprawnymi Danymi" mowi wszystko bez czytania kodu.
+- Jeden ogromny plik `.resource` ze wszystkimi keywordami calej aplikacji -
+  brak podzialu na strony/komponenty utrudnia znalezienie wlasciwego
+  keyworda i zwieksza ryzyko konfliktow przy pracy zespolowej.
+- Duplikowanie tych samych keywordow w wielu plikach zamiast wydzielenia
+  ich do wspolnego `.resource` - poprawka bledu wymaga wtedy zmiany w
+  kilku miejscach, a latwo o jedno pominiete.
+- Mieszanie logiki asercji z logika akcji w jednym keywordzie Page Objectu
+  - utrudnia to ponowne uzycie samej akcji bez natychmiastowej weryfikacji.
+
+## 5. Ulepszenia z AI
+- Wklej fragment HTML/DOM strony i poproś AI o wygenerowanie sekcji
+  `*** Variables ***` z proponowanymi, stabilnymi locatorami (preferuj
+  `id`/`data-testid` nad kruchymi selektorami CSS opartymi na klasach).
+- Poproś AI o propozycje struktury katalogow projektu na podstawie opisu
+  aplikacji (liczba modulow, czy sa API i UI, czy potrzebne jest RPA).
+- Wykorzystaj AI do przegladu istniejacego pliku `.robot` pod katem
+  spojnosci nazewnictwa testow i keywordow wedlug ustalonej konwencji
+  zespolu.
+- Poproś o refaktoryzacje "grubego" pliku `.resource" na kilka mniejszych
+  Page Objectow, jeden na komponent/strone aplikacji.
+- Uzyj AI do wygenerowania checklisty code-review dla nowych plikow .robot
+  (np. "czy sa locatory wprost w tescie?", "czy nazwa testu jest biznesowa?").
+
+## Zadanie na dzis
+Wez dowolny istniejacy test webowy (lub napisz nowy prosty test logowania)
+i rozbij go na warstwy: przenies wszystkie locatory oraz kroki interakcji
+ze strona do osobnego pliku `.resource` (Page Object), a w pliku testowym
+zostaw wylacznie wywolania keywordow w jezyku biznesowym. Nazwij test i
+keywordy zgodnie z konwencjami z tej notatki.
+
+================================================================================
