@@ -1442,3 +1442,109 @@ zostaw wylacznie wywolania keywordow w jezyku biznesowym. Nazwij test i
 keywordy zgodnie z konwencjami z tej notatki.
 
 ================================================================================
+
+# Dzien 17 (2026-08-10) - Integracja CI/CD (Jenkins, GitHub Actions)
+
+## 1. Temat dnia
+Uruchamianie testow Robot Framework w potokach CI/CD - konfiguracja Jenkins i GitHub Actions, publikowanie raportow (log.html, report.html, output.xml) oraz sterowanie kodem wyjscia (exit code) w automatyzacji.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Uruchamiaj testy w potoku dokladnie tak samo jak lokalnie - poprzez `robot` (lub `python -m robot`) z tymi samymi argumentami, zeby uniknac efektu "u mnie dziala".
+- Zawsze archiwizuj artefakty wyjsciowe (`output.xml`, `log.html`, `report.html`) jako artefakty builda - bez nich diagnoza awarii na serwerze CI jest prawie niemozliwa.
+- Rozdzielaj etapy pipeline'u: instalacja zaleznosci (`pip install -r requirements.txt`), uruchomienie testow z odpowiednimi tagami (np. tylko `smoke` w PR, pelny `regression` w nightly), publikacja raportu.
+- Kod wyjscia `robot` odzwierciedla liczbe niezaliczonych testow (0 = wszystkie zaliczone) - CI powinno traktowac niezerowy exit code jako niepowodzenie builda, chyba ze swiadomie uzywasz `--nostatusrc`.
+- Do agregacji wynikow z wielu rownoleglych uruchomien (np. shardy Pabot) uzywaj `rebot` do polaczenia kilku plikow `output.xml` w jeden spojny raport.
+
+## 3. Przyklad kodu
+GitHub Actions - `.github/workflows/robot-tests.yml`:
+```yaml
+name: Robot Framework Tests
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 2 * * *"
+
+jobs:
+  robot-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout kodu
+        uses: actions/checkout@v4
+
+      - name: Konfiguracja Pythona
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalacja zaleznosci
+        run: pip install -r requirements.txt
+
+      - name: Uruchomienie testow smoke (PR) lub regression (nightly)
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            robot --include regression --outputdir results tests/
+          else
+            robot --include smoke --outputdir results tests/
+          fi
+
+      - name: Publikacja raportow jako artefakt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: robot-report
+          path: results/
+```
+
+Jenkins - `Jenkinsfile` (Declarative Pipeline):
+```groovy
+pipeline {
+    agent any
+
+    stages {
+        stage('Instalacja zaleznosci') {
+            steps {
+                sh 'pip install -r requirements.txt'
+            }
+        }
+        stage('Testy Robot Framework') {
+            steps {
+                sh 'robot --include smoke --outputdir results tests/'
+            }
+        }
+    }
+
+    post {
+        always {
+            step([$class: 'RobotPublisher',
+                  outputPath: 'results',
+                  outputFileName: 'output.xml',
+                  reportFileName: 'report.html',
+                  logFileName: 'log.html',
+                  passThreshold: 100,
+                  unstableThreshold: 90])
+            archiveArtifacts artifacts: 'results/**', allowEmptyArchive: true
+        }
+    }
+}
+```
+
+## 4. Najczestsze bledy
+- Brak archiwizacji `log.html`/`report.html` przy zielonym buildzie - gdy test zacznie zawodzic, nikt nie ma historycznych raportow do porownania.
+- Uruchamianie calego zestawu regresyjnego przy kazdym PR - wydluza feedback loop; lepiej ograniczyc PR do tagu `smoke`, a pelna regresje puszczac w nocy.
+- Ignorowanie kodu wyjscia `robot` przez opakowanie komendy w skrypt, ktory zawsze zwraca 0 - build "zielony", mimo ze testy faktycznie nie przeszly.
+- Brak `--outputdir` - wyniki nadpisuja sie w katalogu roboczym albo miesza z innymi krokami pipeline'u.
+- Instalowanie roznych wersji bibliotek na agencie CI niz lokalnie (brak `requirements.txt` z przypietymi wersjami) - testy przechodza lokalnie, a padaja na CI z powodu innej wersji biblioteki.
+
+## 5. Ulepszenia z AI
+- Poproś AI o wygenerowanie startowego pliku `.github/workflows/robot-tests.yml` lub `Jenkinsfile` na podstawie opisu projektu (jezyk, tagi testowe, harmonogram nightly).
+- Wklej log bledu z nieudanego builda CI i poproś AI o wskazanie prawdopodobnej przyczyny (np. rozna wersja biblioteki, brakujaca zmienna srodowiskowa, timeout).
+- Uzyj AI do zaproponowania strategii podzialu testow na etapy pipeline'u (smoke w PR, regression nightly, retry dla testow niestabilnych/flaky).
+- Poproś o wygenerowanie skryptu laczacego wiele plikow `output.xml` (np. z rownoleglych shardow Pabot) za pomoca `rebot` w kroku CI.
+- Wykorzystaj AI do przegladu istniejacego pipeline'u pod katem dobrych praktyk (czy sa archiwizowane artefakty, czy exit code jest respektowany, czy zaleznosci maja przypiete wersje).
+
+## Zadanie na dzis
+Dodaj do swojego projektu testowego prosty workflow GitHub Actions (lub Jenkinsfile), ktory instaluje zaleznosci, uruchamia testy z tagiem `smoke` i archiwizuje katalog z raportami jako artefakt builda. Sprawdz, ze pipeline konczy sie niepowodzeniem, gdy celowo zepsujesz jeden test.
+
+================================================================================
