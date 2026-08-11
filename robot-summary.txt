@@ -1442,3 +1442,129 @@ zostaw wylacznie wywolania keywordow w jezyku biznesowym. Nazwij test i
 keywordy zgodnie z konwencjami z tej notatki.
 
 ================================================================================
+# Dzien 17 (2026-08-11, wtorek) - CI/CD integracja Robot Framework (Jenkins, GitHub Actions)
+
+## 1. Temat dnia
+Wlaczenie testow Robot Framework do pipeline'u CI/CD - automatyczne
+uruchamianie ich przy kazdym pushu/PR (np. w GitHub Actions lub Jenkins),
+publikowanie wynikow (`report.html`, `log.html`, `output.xml`) jako
+artefaktow oraz oznaczanie builda jako failed, gdy testy nie przejda.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Uruchamiaj testy w CI dokladnie tak samo jak lokalnie - trzymaj wersje
+  Pythona i zaleznosci w `requirements.txt`/`Pipfile.lock`, zeby uniknac
+  efektu "u mnie dziala".
+- Zawsze archiwizuj/publikuj wyniki (`output.xml`, `log.html`,
+  `report.html`) jako artefakty builda - bez nich debugowanie awarii w CI
+  polega na zgadywaniu na podstawie samego stdout.
+- Rozdzielaj testy tagami na szybki smoke-set uruchamiany przy kazdym
+  pushu (`--include smoke`) oraz pelny regresyjny zestaw uruchamiany
+  cyklicznie/noca - skraca to czas oczekiwania na feedback z PR.
+- Kod wyjscia `robot` (`rc`) odzwierciedla liczbe testow zakonczonych
+  niepowodzeniem (0 = wszystkie OK) - CI powinno interpretowac `rc != 0`
+  jako czerwony build, bez dodatkowego parsowania logow.
+- Uzywaj `rebot` do laczenia wynikow z kilku rownoleglych wykonan
+  (np. shardowanych po tagach lub przegladarkach) w jeden zbiorczy
+  `report.html`/`log.html` przed opublikowaniem jako artefakt.
+
+## 3. Przyklad kodu
+Workflow GitHub Actions `.github/workflows/robot-tests.yml`:
+```yaml
+name: Robot Framework Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instaluj zaleznosci
+        run: pip install -r requirements.txt
+
+      - name: Uruchom testy Robot Framework
+        run: |
+          robot --outputdir results --include smoke tests/
+
+      - name: Opublikuj wyniki jako artefakt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: robot-results
+          path: results/
+```
+
+Odpowiednik jako `Jenkinsfile` (Pipeline deklaratywny):
+```groovy
+pipeline {
+    agent any
+    stages {
+        stage('Instaluj zaleznosci') {
+            steps {
+                sh 'pip install -r requirements.txt'
+            }
+        }
+        stage('Testy Robot Framework') {
+            steps {
+                sh 'robot --outputdir results --include smoke tests/'
+            }
+        }
+    }
+    post {
+        always {
+            archiveArtifacts artifacts: 'results/*.html,results/*.xml'
+            robot outputPath: 'results'
+        }
+    }
+}
+```
+
+## 4. Najczestsze bledy
+- Brak publikowania `log.html`/`report.html` jako artefaktow - po awarii
+  w CI dostepny jest tylko surowy stdout, co znaczaco wydluza diagnoze.
+- Krok publikacji wynikow bez `if: always()` (GitHub Actions) lub bloku
+  `post { always {...} }` (Jenkins) - gdy testy zakoncza sie niepowodzeniem,
+  wyniki wcale nie zostana zarchiwizowane, bo poprzedni krok przerwal job.
+- Uruchamianie w CI calego, pelnego zestawu testow (w tym wolnych E2E) przy
+  kazdym malym pushu - spowalnia to petle feedbacku dla zespolu zamiast
+  najpierw puscic szybki smoke-set.
+- Poleganie wylacznie na kodzie wyjscia `robot` bez ustawienia limitu czasu
+  (`timeout`) joba w CI - zawieszony test (np. brak elementu na stronie w
+  testach webowych) moze blokowac runner bez konca.
+- Rozne wersje bibliotek/Pythona lokalnie i w CI (brak zamrozonych
+  zaleznosci) - test przechodzi lokalnie, a w CI failuje z niezwiazanym
+  bledem importu.
+
+## 5. Ulepszenia z AI
+- Wklej opis swojego projektu (jezyk, struktura katalogow, biblioteki RF) i
+  poproś AI o wygenerowanie startowego pliku `robot-tests.yml` lub
+  `Jenkinsfile` dopasowanego do tej struktury.
+- Poproś AI o przeanalizowanie logu z nieudanego builda CI (fragment
+  `output.xml`/stdout) i wskazanie, ktory krok/test zawiodl oraz
+  prawdopodobna przyczyne.
+- Uzyj AI do zaproponowania podzialu testow na tagi/shardy (np. smoke vs
+  regression, per-modul) tak, by rownolegle joby CI konczyly sie w
+  podobnym czasie.
+- Poproś o wygenerowanie kroku CI publikujacego `report.html` jako
+  komentarz w pull requescie (np. link do artefaktu lub podsumowanie
+  liczby testow OK/FAIL).
+- Wykorzystaj AI do przegladu istniejacego pipeline'u CI/CD pod katem
+  brakujacego `if: always()`/`post { always {...} }` czy braku limitu czasu
+  na job.
+
+## Zadanie na dzis
+Dodaj do swojego repozytorium (lub lokalnego projektu testowego) plik
+workflow GitHub Actions, ktory: instaluje zaleznosci z `requirements.txt`,
+uruchamia testy Robot Framework z tagiem `smoke`, a nastepnie publikuje
+katalog wynikowy (`log.html`, `report.html`, `output.xml`) jako artefakt
+builda - rowniez wtedy, gdy testy zakoncza sie niepowodzeniem.
+
+================================================================================
