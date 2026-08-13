@@ -1568,3 +1568,108 @@ katalog wynikowy (`log.html`, `report.html`, `output.xml`) jako artefakt
 builda - rowniez wtedy, gdy testy zakoncza sie niepowodzeniem.
 
 ================================================================================
+
+# Dzien 18 (2026-08-13) - Debugowanie testow (RIDE, Robotidy, rflint)
+
+## 1. Temat dnia
+Debugowanie i statyczna analiza testow Robot Framework - praca z edytorem RIDE,
+formatowanie kodu narzedziem Robotidy oraz wykrywanie bledow stylu/jakosci
+narzedziem rflint, a takze techniki debugowania uruchomien (--dryrun, Debug,
+poziomy logowania).
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Uzywaj `robot --dryrun` przed pelnym uruchomieniem duzego suite'u - RF
+  sprawdza wtedy, czy wszystkie slowa kluczowe i biblioteki istnieja oraz
+  czy argumenty sie zgadzaja, bez faktycznego wykonania krokow (np. klikania
+  w przegladarce czy wywolan API).
+- Podnies poziom logowania flaga `--loglevel DEBUG` (lub `TRACE`), zeby w
+  `log.html` zobaczyc pelne argumenty wywolan slow kluczowych i biblioteki -
+  domyslny poziom `INFO` czesto ukrywa szczegoly potrzebne do diagnozy.
+- Trzymaj Robotidy (formatowanie) i rflint (statyczna analiza jakosci) jako
+  krok w CI oraz jako pre-commit hook - wylapuja niespojne wciecia, zbyt
+  dlugie sciezki testowe czy brak [Documentation] zanim trafi to do repo.
+- W RIDE korzystaj z widoku "Text Edit" do wprowadzania zmian recznie (widok
+  siatki bywa zawodny przy kopiowaniu/wklejaniu), a przed zapisem uruchamiaj
+  podglad, by upewnic sie, ze sekcje sie nie rozjechaly.
+- Do debugowania pojedynczego testu uzywaj selektywnego uruchamiania
+  (`--test "Nazwa testu"` lub tagow) zamiast catego suite'u - skraca to
+  petle feedbacku podczas szukania przyczyny bledu.
+
+## 3. Przykladowy kod
+```robotframework
+*** Settings ***
+Library    Collections
+Library    OperatingSystem
+
+*** Test Cases ***
+Test z checkpointami do debugowania
+    [Documentation]    Test celowo loguje stan zmiennych, aby ulatwic
+    ...    diagnoze w log.html podczas debugowania.
+    [Tags]    debug
+
+    ${lista}=    Create List    jablko    banan    gruszka
+    Log    Stan listy przed modyfikacja: ${lista}    level=DEBUG
+
+    Append To List    ${lista}    pomarancza
+    Log    Stan listy po modyfikacji: ${lista}    level=DEBUG
+
+    ${dlugosc}=    Get Length    ${lista}
+    Log    Dlugosc listy: ${dlugosc}    level=DEBUG
+    Should Be Equal As Integers    ${dlugosc}    4
+
+    # Punkt kontrolny - przerywa test i pokazuje pelny stan w konsoli/log.html
+    Run Keyword If    ${dlugosc} != 4
+    ...    Fail    Nieoczekiwana dlugosc listy: ${dlugosc}
+```
+
+Uruchomienie z narzedziami do analizy i debugowania (linia komend):
+```bash
+# 1. Sprawdzenie skladni i poprawnosci slow kluczowych bez wykonania testow
+robot --dryrun --outputdir results tests/
+
+# 2. Automatyczne formatowanie plikow .robot do spojnego stylu
+robotidy tests/
+
+# 3. Statyczna analiza jakosci (dlugosc linii, brak dokumentacji, wciecia)
+rflint tests/
+
+# 4. Pelne uruchomienie z podniesionym poziomem logow, tylko jeden test
+robot --loglevel DEBUG --test "Test z checkpointami do debugowania" ^
+      --outputdir results tests/debug_demo.robot
+```
+
+## 4. Najczestsze bledy
+- Debugowanie "na oko" przez wielokrotne uruchamianie calego suite'u zamiast
+  pojedynczego testu (`--test`) lub uzycia `--dryrun` do walidacji skladni -
+  marnuje to czas przy dlugich testach webowych/API.
+- Ignorowanie ostrzezen rflint i Robotidy w CI ("i tak dziala") - z czasem
+  prowadzi to do niespojnego, trudnego w utrzymaniu kodu w calym projekcie.
+- Analizowanie tylko konsoli zamiast `log.html` - konsola pokazuje jedynie
+  skrocony wynik, a `log.html` zawiera pelne argumenty, zrzuty ekranu i
+  hierarchie wywolan potrzebne do realnej diagnozy.
+- Zostawianie w kodzie tymczasowych `Log ... level=DEBUG` lub `Sleep` uzytych
+  do debugowania na stale, zamiast usunac je po znalezieniu przyczyny bledu.
+- Uruchamianie rflint/Robotidy tylko lokalnie i "od czasu do czasu", bez
+  wpiecia w CI - regresje stylu wracaja przy kazdym nowym PR.
+
+## 5. Ulepszenia z AI
+- Wklej fragment `log.html`/konsoli z nieudanego testu i poproś AI
+  (Claude/ChatGPT) o wskazanie najbardziej prawdopodobnej przyczyny bledu
+  oraz sugerowana poprawke slowa kluczowego lub locatora.
+- Poproś AI o przeanalizowanie raportu rflint i wyjasnienie, ktore reguly
+  sa najwazniejsze do naprawy w pierwszej kolejnosci w danym projekcie.
+- Uzyj AI do wygenerowania checklisty "co sprawdzic przed zgloszeniem buga"
+  na podstawie typowych przyczyn falszywych niepowodzen (flaky testy) w RF.
+- Poproś AI o zaproponowanie konfiguracji Robotidy (`.robotidy`) i rflint
+  (`.rflint`) dopasowanej do konwencji istniejacego kodu w repozytorium.
+- Wykorzystaj AI do przepisania nieczytelnego, zagniezdzonego `Run Keyword If`
+  na prostsza, latwiejsza do debugowania strukture (np. rozbicie na Custom
+  Keyword z jasnymi krokami).
+
+## Zadanie na dzis
+Wez dowolny istniejacy plik .robot (np. z poprzednich dni), uruchom na nim
+kolejno: `robot --dryrun`, `robotidy` (w trybie sprawdzania `--check`) oraz
+`rflint`. Zapisz, jakie 3 problemy/ostrzezenia wykryly narzedzia i popraw
+przynajmniej jedno z nich w kodzie.
+
+================================================================================
