@@ -1568,3 +1568,105 @@ katalog wynikowy (`log.html`, `report.html`, `output.xml`) jako artefakt
 builda - rowniez wtedy, gdy testy zakoncza sie niepowodzeniem.
 
 ================================================================================
+# Dzien 18 (2026-08-14, piatek) - Debugowanie testow (RIDE, Robotidy, rflint)
+
+## 1. Temat dnia
+Narzedzia wspierajace pisanie, formatowanie i statyczna analize testow Robot
+Framework: edytor RIDE, formater Robotidy oraz lintery rflint/robocop. Lapia
+bledy i niespojnosci zanim test w ogole zostanie uruchomiony.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Robotidy to oficjalny, deterministyczny formater kodu .robot/.resource -
+  uruchamiaj go automatycznie (pre-commit hook, CI) zamiast recznie pilnowac
+  wciec, wyrownania kolumn i spacji.
+- rflint (i nowoczesniejszy robocop) wykrywaja problemy jakosciowe: zbyt
+  dlugie test case'y, brak [Documentation], zduplikowane nazwy slow
+  kluczowych, zbyt glebokie zagniezdzenie - traktuj je jak pylint/eslint dla
+  Robot Framework.
+- RIDE (Robot Framework IDE) bywa przydatny do szybkiego podgladu struktury
+  suite'ow, ale jest juz mniej rozwijany - do codziennej pracy lepiej sprawdza
+  sie VS Code z rozszerzeniem Robot Framework Language Server (podswietlanie
+  skladni, przejscie do definicji keywordu, podpowiedzi).
+- Do debugowania pojedynczego, zawieszajacego sie testu uzywaj flagi
+  --loglevel DEBUG oraz izolacji jednego testu (--test "Nazwa testu"), zamiast
+  odpalac caly, dlugi suite od nowa wielokrotnie.
+- Wlacz linter i formatter do CI jako osobny, szybki krok (--check w
+  Robotidy) - dzieki temu bledy stylu wylapiesz zanim testy w ogole zaczna
+  sie uruchamiac.
+
+## 3. Przykladowy kod
+Konfiguracja w pyproject.toml:
+```toml
+[tool.robotidy]
+line_length = 120
+spacecount = 4
+
+[tool.robocop]
+include = ["all"]
+exclude = ["line-too-long"]
+```
+
+Uruchomienie formatowania i lintowania lokalnie:
+```bash
+# Sformatuj caly katalog testow (nadpisuje pliki)
+robotidy tests/
+
+# Sprawdz formatowanie bez modyfikacji plikow (np. w CI)
+robotidy --check tests/
+
+# Statyczna analiza jakosci kodu
+robocop tests/
+
+# Starszy, klasyczny linter
+rflint tests/
+```
+
+Przyklad testu z celowym problemem, ktory zlapie linter:
+```robotframework
+*** Test Cases ***
+test1
+    Log    Za krotka, nieopisowa nazwa testu bez [Documentation] i [Tags]
+    Click Element    id=btn
+    Click Element    id=btn
+    Click Element    id=btn
+```
+robocop/rflint zglosza tu m.in.: brak dokumentacji, brak tagow, nazwe
+niezgodna z konwencja oraz zduplikowane, powtarzajace sie kroki.
+
+Uruchomienie testu w trybie debug z pelnym logiem:
+```bash
+robot --loglevel DEBUG --outputdir results tests/logowanie.robot
+```
+
+## 4. Najczestsze bledy
+- Ignorowanie ostrzezen lintera "bo test i tak przechodzi" - dlug techniczny
+  narasta i po miesiacach nikt nie wie, ktore ostrzezenia sa wazne.
+- Reczne poprawianie formatowania zamiast uruchomienia Robotidy - prowadzi do
+  niespojnego stylu w zespole i niepotrzebnych konfliktow w code review.
+- Debugowanie przez wielokrotne uruchamianie calego, dlugiego test suite'u
+  zamiast wyizolowania jednego testu flaga --test "Nazwa testu" lub tagiem.
+- Poleganie wylacznie na report.html przy diagnozie bledu - to log.html
+  (poziom DEBUG) pokazuje faktyczne argumenty i wartosci zmiennych krok po
+  kroku.
+- Brak robotidy --check / robocop w CI - problemy jakosciowe wykrywane sa
+  dopiero "recznie", przy okazji code review, zamiast automatycznie.
+
+## 5. Ulepszenia z AI
+- Wklej output z robocop/rflint do AI i poproś o priorytetyzacje: ktore
+  ostrzezenia sa krytyczne (np. duplikacja logiki), a ktore kosmetyczne.
+- Poproś AI o wygenerowanie konfiguracji pyproject.toml dla Robotidy/robocop
+  dopasowanej do konwencji juz istniejacych w Twoim repozytorium.
+- Wklej fragment log.html (lub jego tekstowy odpowiednik z --loglevel DEBUG)
+  z nieudanego testu i poproś AI o wskazanie prawdopodobnej przyczyny awarii.
+- Uzyj AI do refaktoryzacji testu wykrytego przez linter jako "zbyt dlugi" -
+  poproś o podzial na mniejsze, wielokrotnego uzytku Custom Keywords.
+- Poproś AI o wygenerowanie pre-commit hooka (.pre-commit-config.yaml)
+  uruchamiajacego robotidy --check i robocop przed kazdym commitem.
+
+## Zadanie na dzis
+Zainstaluj robotidy i robocop (pip install robotframework-tidy
+robotframework-robocop), uruchom je na dowolnym wlasnym pliku .robot (lub na
+przykladzie z tej notatki), a nastepnie napraw co najmniej dwa zglosone
+problemy - jeden formatowania (Robotidy) i jeden jakosciowy (robocop/rflint).
+
+================================================================================
