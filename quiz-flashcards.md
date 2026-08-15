@@ -185,3 +185,78 @@
 
 ================================================================================
 
+## Tydzien 4 - Quiz (sobota, 2026-08-15) - Dni 16-18
+
+1. Co jest glownym celem wzorca Page Object w projektach Robot Framework?
+   a) Przyspieszenie uruchamiania testow  b) Oddzielenie locatorow/logiki
+      strony od kroków testowych, zeby zmiana UI wymagala edycji w jednym
+      miejscu  c) Generowanie raportow  d) Zastapienie plikow Resource
+
+2. Jaka jest zalecana konwencja nazewnictwa test case'ow w Robot Framework?
+   a) camelCase jak w Javie  b) Czytelne zdania opisujace zachowanie, np.
+      "Zaloguj uzytkownika z poprawnymi danymi"  c) Same skroty (TC001,
+      TC002)  d) Nazwy plikow zamiast nazw testow
+
+3. Do czego sluzy plik `Jenkinsfile`/workflow GitHub Actions w kontekscie
+   Robot Framework?
+   a) Do przechowywania danych testowych  b) Do automatycznego uruchamiania
+      testow (np. przy kazdym pushu) oraz publikowania raportow (log.html,
+      report.html) jako artefaktow builda  c) Do formatowania kodu  d) Do
+      definiowania keywordow
+
+4. Jak najlepiej opublikowac `log.html`/`report.html` z pipeline'u CI/CD?
+   a) Wkleic ich tresc do logow konsoli builda  b) Zapisac jako artefakty
+      builda (np. `archiveArtifacts`/`upload-artifact`), zeby byly dostepne
+      do pobrania po zakonczeniu builda  c) Nie ma potrzeby ich zachowywac
+      d) Wyslac emailem do calego zespolu za kazdym razem
+
+5. Do czego sluzy Robotidy?
+   a) Do generowania raportow HTML  b) Do automatycznego, deterministycznego
+      formatowania kodu .robot/.resource (wciecia, spacje, wyrownanie)
+      c) Do uruchamiania testow rownolegle  d) Do zarzadzania zmiennymi
+      srodowiskowymi
+
+6. Czym rozni sie rflint/robocop od Robotidy?
+   a) Niczym, to synonimy tego samego narzedzia  b) rflint/robocop to
+      lintery wykrywajace problemy jakosciowe (np. brak [Documentation],
+      zbyt dlugie testy), a Robotidy tylko formatuje styl kodu  c) Robotidy
+      sluzy do uruchamiania testow, a rflint do ich zapisywania  d) Oba
+      sluza wylacznie do generowania dokumentacji
+
+7. Jak najskuteczniej wyizolowac i zdebugowac jeden, zawieszajacy sie test
+   bez uruchamiania calego suite'u?
+   a) Uzyc flagi `--test "Nazwa testu"` (ewentualnie z `--loglevel DEBUG`)
+   b) Usunac wszystkie inne testy z pliku  c) Zakomentowac cala reszte
+      kodu recznie za kazdym razem  d) Nie da sie tego zrobic selektywnie
+
+8. Dlaczego struktura projektu z podzialem na `tests/`, `resources/` i
+   `results/` (lub podobna) ulatwia utrzymanie duzego zestawu testow?
+   a) RF tego wymaga, inaczej nie dziala  b) Oddziela kod testowy, wspoldzie-
+      lone keywordy/Page Objecty i generowane wyniki, co ulatwia nawigacje
+      i unika przypadkowego commitowania wynikow  c) Przyspiesza wykonanie
+      testow  d) Nie ma to zadnego znaczenia praktycznego
+
+**Odpowiedzi:** 1-b, 2-b, 3-b, 4-b, 5-b, 6-b, 7-a, 8-b
+
+## Tydzien 4 - Fiszki
+
+- Page Object Pattern -> locatory i akcje na stronie trzymane w dedykowanym
+  Resource/keywordach, testy odwoluja sie tylko do nazw keywordow (nie do
+  surowych selektorow)
+- Nazewnictwo testow -> pelne, czytelne zdania (Title Case) zamiast skrotow
+  typu TC001 - nazwa testu = dokumentacja
+- CI/CD (Jenkins/GitHub Actions) -> automatyczne uruchamianie `robot` przy
+  kazdym pushu/PR + archiwizacja `log.html`/`report.html` jako artefaktow
+- `archiveArtifacts` (Jenkins) / `actions/upload-artifact` (GitHub Actions)
+  -> publikuja wyniki testow po zakonczeniu builda, nawet gdy testy padly
+- Robotidy -> formater kodu (styl, wciecia, spacje) - uruchamiany z flaga
+  `--check` w CI wykrywa niesformatowany kod bez modyfikacji plikow
+- rflint / robocop -> lintery jakosci (brak dokumentacji/tagow, zduplikowane
+  keywordy, zbyt dlugie testy) - traktuj jak eslint/pylint dla RF
+- `--test "Nazwa testu"` + `--loglevel DEBUG` -> izolacja i szczegolowe
+  debugowanie pojedynczego testu bez uruchamiania calego suite'u
+- Struktura projektu (`tests/`, `resources/`, `results/`) -> rozdziela kod
+  testow, wspoldzielone keywordy/Page Objecty i generowane wyniki (te
+  ostatnie zwykle w `.gitignore`)
+
+================================================================================

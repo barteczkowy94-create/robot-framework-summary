@@ -1670,3 +1670,99 @@ przykladzie z tej notatki), a nastepnie napraw co najmniej dwa zglosone
 problemy - jeden formatowania (Robotidy) i jeden jakosciowy (robocop/rflint).
 
 ================================================================================
+# Dzień 19 (2026-08-15, sobota) - Podstawy składni Robot Framework (runda 2: sekcja Settings, importy, embedded arguments)
+
+## 1. Temat dnia
+Cykl 18 tematów właśnie się zamknął, więc wracamy do podstaw składni - tym
+razem z naciskiem na to, co często pomijane na starcie: pełną zawartość
+sekcji *** Settings ***, importy (Library/Resource/Variables), metadane
+suite'u, komentarze oraz "embedded arguments" w nazwach słów kluczowych.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Sekcja *** Settings *** to nie tylko Library - znajdziesz tam też Resource
+  (import plików .resource), Variables (import zmiennych z pliku .py/.yaml),
+  Metadata (dodatkowe informacje w report.html) oraz Suite Setup/Teardown,
+  Test Setup/Teardown i Test Tags (dawniej Force Tags) stosowane globalnie
+  dla całego suite'u.
+- "Embedded arguments" pozwalają wplatać argumenty bezpośrednio w nazwę
+  słowa kluczowego (np. `Zaloguj jako ${rola}`) - kod czyta się wtedy jak
+  zdanie, bez osobnej listy argumentów pod spodem.
+- Styl BDD (Given/When/Then/And/But) to wyłącznie konwencja nazewnicza -
+  Robot Framework automatycznie "obcina" te prefiksy przy dopasowywaniu
+  słowa kluczowego, więc `Given uzytkownik jest zalogowany` i `uzytkownik
+  jest zalogowany` to ten sam keyword.
+- Osobna sekcja *** Comments *** (rzadko używana) pozwala trzymać większe
+  bloki notatek poza kodem testów - w praktyce częściej wystarczy zwykłe #.
+- Kolejność importów w Settings ma znaczenie przy konfliktach nazw słów
+  kluczowych - biblioteka/resource zaimportowana później "przykrywa" wcześ-
+  niejszą przy tej samej nazwie keywordu, więc unikaj duplikatów nazw.
+
+## 3. Przykładowy kod
+```robotframework
+*** Settings ***
+Documentation     Przykład pelnej sekcji Settings z importami i metadanymi.
+Metadata          Autor         Zespol QA
+Metadata          Wersja        1.2
+Library           Collections
+Resource          resources/logowanie.resource
+Variables         config/dane_testowe.py
+Suite Setup       Log    Start suite'u
+Suite Teardown    Log    Koniec suite'u
+Test Tags         smoke    regresja
+
+*** Test Cases ***
+Given uzytkownik chce sie zalogowac
+    [Documentation]    Test pisany w stylu BDD, korzysta z embedded arguments.
+    Given uzytkownik jest na stronie logowania
+    When Zaloguj jako ${ADMIN}
+    Then uzytkownik widzi ekran glowny
+
+*** Keywords ***
+uzytkownik jest na stronie logowania
+    Log    Otwieram strone logowania
+
+Zaloguj jako ${rola}
+    [Documentation]    Embedded argument ${rola} wplecony w nazwe keywordu.
+    Log    Loguje sie jako: ${rola}
+
+uzytkownik widzi ekran glowny
+    Log    Sprawdzam obecnosc ekranu glownego
+```
+
+## 4. Najczęstsze błędy
+- Mylenie Force Tags/Test Tags z tagami na poziomie testu - ustawienie w
+  Settings dotyczy WSZYSTKICH testów w pliku, łatwo przypadkiem otagować
+  cały suite jednym, zbyt ogólnym tagiem.
+- Import dwóch bibliotek/resource'ów z keywordem o identycznej nazwie bez
+  jawnego wskazania, z której biblioteki korzystać (`Library.Keyword`) -
+  RF zgłasza wtedy błąd niejednoznaczności dopiero przy uruchomieniu.
+- Nadużywanie embedded arguments tam, gdzie zwykła lista argumentów byłaby
+  czytelniejsza - dobre dla krótkich, zdaniowych keywordów, złe dla
+  keywordów z wieloma parametrami.
+- Zapominanie, że prefiksy Given/When/Then/And/But są tylko kosmetyczne -
+  próba wywołania keywordu z innym prefiksem niż w definicji "nie działa",
+  bo ktoś myśli, że to osobne słowa kluczowe.
+- Brak Metadata i Documentation na poziomie Settings - report.html traci
+  kontekst (kto pisał, po co, jaka wersja), co utrudnia utrzymanie projektu.
+
+## 5. Ulepszenia z AI
+- Wklej istniejący plik .robot i poproś AI o wypisanie wszystkich importów
+  z sekcji Settings wraz z krótkim opisem, do czego służy każdy z nich -
+  przydatne przy wdrażaniu się w nieznany projekt.
+- Poproś Claude/Copilot o przepisanie testu z klasycznych nazw keywordów na
+  styl BDD (Given/When/Then) lub odwrotnie, w zależności od konwencji
+  zespołu.
+- Użyj AI do wykrycia konfliktów nazw keywordów między zaimportowanymi
+  bibliotekami/resource'ami, zanim RF zgłosi błąd niejednoznaczności.
+- Poproś o wygenerowanie keywordu z embedded arguments na podstawie opisu
+  słownego (np. "keyword, który przyjmuje rolę użytkownika w nazwie").
+- Poproś AI o uzupełnienie brakujących pól Metadata/Documentation w Settings
+  na podstawie zawartości i historii commitów pliku testowego.
+
+## Zadanie na dziś
+Rozbuduj dowolny swój plik .robot o pełną sekcję *** Settings *** (Documen-
+tation, co najmniej jedno Metadata, Test Tags) oraz dodaj jeden keyword z
+embedded argument, który wywołasz w teście z dwoma różnymi wartościami
+argumentu.
+
+================================================================================
