@@ -1766,3 +1766,90 @@ embedded argument, który wywołasz w teście z dwoma różnymi wartościami
 argumentu.
 
 ================================================================================
+# Dzien 20 (2026-08-16, niedziela) - Slowa kluczowe wbudowane BuiltIn (runda 2: mniej oczywiste, ale przydatne keywordy)
+
+## 1. Temat dnia
+Druga runda tematu BuiltIn - tym razem keywordy rzadziej omawiane na starcie,
+ale bardzo przydatne w codziennej pracy: oczekiwanie na warunek, wielokrotne
+wywolania, konwersje typow, asercje na dlugosci/typie oraz kontrolowane
+pomijanie testow.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Wait Until Keyword Succeeds zamiast recznych petli/Sleep - retry z limitem
+  czasu (np. `10x    2s`) jest czytelniejszy i bardziej odporny na
+  nierownomierne opoznienia (np. asynchroniczne API/UI) niz stale Sleep.
+- Length Should Be, Should Be True i Should Be Equal As Numbers to trzy
+  rozne asercje do trzech roznych celow - nie zastepuj ich generycznym
+  Should Be Equal, bo komunikat bledu bedzie mniej czytelny w log.html.
+- Convert To Integer/Number/String konwertuje jawnie typ zmiennej - dane z
+  zewnetrznych zrodel (API, pliki CSV, zmienne srodowiskowe) zawsze
+  przychodza jako string i wymagaja jawnej konwersji przed porownaniem.
+- Skip / Skip If pozwala warunkowo pominac test (np. na danym srodowisku)
+  bez oznaczania go jako FAIL - lepsze niz komentowanie testu lub Pass
+  Execution z ukrytym sensem.
+- Run Keywords laczy kilka prostych wywolan w jednej linii (rozdzielonych
+  `AND`) - wygodne przy krotkich sekwencjach, ale przy wiecej niz 2-3
+  krokach czytelniejszy jest zwykly blok wielolinijkowy lub Custom Keyword.
+
+## 3. Przykladowy kod
+```robotframework
+*** Test Cases ***
+Weryfikacja mniej oczywistych keywordow BuiltIn
+    [Documentation]    Przyklad Wait Until Keyword Succeeds, konwersji typow i Skip If.
+    ${status_code}=    Set Variable    200
+    ${status_code}=    Convert To Integer    ${status_code}
+    Should Be True    ${status_code} == 200
+
+    Wait Until Keyword Succeeds    5x    1s
+    ...    Sprawdz czy zasob jest gotowy
+
+    ${lista}=    Create List    a    b    c
+    Length Should Be    ${lista}    3
+
+    Skip If    '${status_code}' != '200'    msg=Test pomijany - inny status niz 200
+
+    Run Keywords    Log    Krok pierwszy
+    ...    AND    Log    Krok drugi
+
+*** Keywords ***
+Sprawdz czy zasob jest gotowy
+    [Documentation]    Symulacja sprawdzenia gotowosci zasobu - w realnym
+    ...    scenariuszu byloby to np. zapytanie do API lub sprawdzenie pliku.
+    Log    Zasob gotowy
+```
+
+## 4. Najczestsze bledy
+- Uzywanie Sleep w petli zamiast Wait Until Keyword Succeeds - dluzszy,
+  mniej czytelny kod i sztywny czas oczekiwania zamiast dynamicznego retry.
+- Porownywanie stringa z liczba bez Convert To Integer/Number - test
+  przechodzi lub pada z powodu typu danych, a nie faktycznej logiki.
+- Nadmierne uzycie Run Keywords z wieloma krokami w jednej linii - trudne
+  do debugowania w log.html, bo wszystkie kroki widac jako jedna pozycja.
+- Mylenie Skip z Pass Execution - Skip oznacza test jako pominiety (SKIP),
+  Pass Execution wymusza PASS mimo niewykonania reszty kroku, co zaciemnia
+  prawdziwy wynik w report.html.
+- Brak limitu czasu/liczby prob w Wait Until Keyword Succeeds - ustawienie
+  zbyt duzej liczby powtorzen potrafi ukryc realny problem wydajnosciowy
+  zamiast go wykryc.
+
+## 5. Ulepszenia z AI
+- Wklej fragment testu z reczna petla i Sleep, poproś Claude/Copilot o
+  przepisanie go na Wait Until Keyword Succeeds z sensownymi parametrami
+  retry dopasowanymi do opisanego scenariusza.
+- Poproś AI o wskazanie miejsc w istniejacych testach, gdzie brakuje
+  jawnej konwersji typow (Convert To Integer/Number) przed porownaniem.
+- Uzyj AI do wygenerowania warunkow Skip If na podstawie opisu, kiedy dany
+  test nie powinien byc uruchamiany (np. "pomin na srodowisku produkcyjnym").
+- Poproś o wyjasnienie roznicy Skip vs Pass Execution vs Fail w kontekscie
+  konkretnego przypadku, gdy nie jest jasne, ktorego uzyc.
+- Wklej log.html/output.xml z nieudanym Wait Until Keyword Succeeds i
+  poproś AI o analize, czy problem lezy w za krotkim czasie oczekiwania,
+  czy w faktycznym bledzie aplikacji.
+
+## Zadanie na dzis
+Napisz test, ktory: (1) pobiera wartosc jako string i konwertuje ja na
+liczbe przez Convert To Integer, (2) uzywa Wait Until Keyword Succeeds do
+wywolania keywordu symulujacego niestabilny zasob, (3) warunkowo pomija
+krok koncowy przez Skip If na podstawie wartosci zmiennej.
+
+================================================================================
