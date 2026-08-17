@@ -1853,3 +1853,108 @@ wywolania keywordu symulujacego niestabilny zasob, (3) warunkowo pomija
 krok koncowy przez Skip If na podstawie wartosci zmiennej.
 
 ================================================================================
+
+# Dzien 21 (2026-08-17, poniedzialek) - Zmienne i ich zasiegi (runda 2: skladnia VAR, pliki zmiennych, wyrazenia Python)
+
+## 1. Temat dnia
+Druga runda tematu zmiennych - nowoczesna skladnia VAR (Robot Framework 7.0+)
+jako zamiennik Set Test/Suite/Global Variable, ladowanie zmiennych z plikow
+zewnetrznych (.py/.yaml), wyrazenia Python wewnatrz ${{ }} oraz bezpieczne
+sprawdzanie istnienia zmiennej.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- VAR (RF 7.0+) to jedno slowo kluczowe zastepujace Set Variable/Set Test
+  Variable/Set Suite Variable/Set Global Variable - zasieg okresla jawny
+  argument `scope=LOCAL|TEST|SUITE|GLOBAL` zamiast osobnych keywordow.
+- Domyslny zasieg VAR bez podania `scope=` to LOCAL (jak zwykle przypisanie
+  ${x}=), wiec przy migracji ze starego kodu latwo przypadkiem zawezic
+  zasieg zmiennej, jesli nie doda sie jawnie odpowiedniego `scope=`.
+- Zlozone lub duze zestawy danych (np. konfiguracje wielu srodowisk) lepiej
+  trzymac w pliku zmiennych .py lub .yaml i ladowac przez
+  `Variables    plik.py` w *** Settings *** albo `--variablefile` z linii
+  polecen, zamiast rozrastac sekcje *** Variables *** w kazdym suite.
+- Wyrazenie ${{ python_expr }} pozwala wykonac dowolny kod Python wprost w
+  miejscu uzycia zmiennej (np. list comprehension, arytmetyka, wywolania
+  funkcji) - dla prostych obliczen czytelniejsze niz Evaluate + Set
+  Variable, ale nadużywane pogarsza czytelnosc pliku .robot.
+- Get Variable Value zwraca wartosc domyslna zamiast rzucac wyjatek, gdy
+  zmienna nie istnieje, a Variable Should Exist/Should Not Exist sluzy do
+  jawnej asercji o obecnosci zmiennej - uzywaj ich zamiast reczne sprawdzanie
+  przez Run Keyword And Ignore Error.
+
+## 3. Przykladowy kod
+```robotframework
+*** Settings ***
+Library      Collections
+Variables    config/env_data.py
+
+*** Variables ***
+${MNOZNIK}    3
+
+*** Test Cases ***
+Nowoczesna skladnia VAR i wyrazenia Python
+    VAR    ${liczba}    10    scope=TEST
+    VAR    @{wyniki}    scope=SUITE
+
+    ${podwojona}=    Evaluate    ${liczba} * ${MNOZNIK}
+    VAR    ${kwadraty}    ${{ [x**2 for x in range(5)] }}
+
+    Log    Wynik obliczen: ${podwojona}
+    Log    Lista kwadratow: ${kwadraty}
+
+    ${wartosc}=    Get Variable Value    $ZMIENNA_Z_KONFIGA    domyslna_wartosc
+    Should Not Be Empty    ${wartosc}
+
+Bezpieczne sprawdzenie istnienia zmiennej
+    VAR    ${status_serwisu}    aktywny    scope=GLOBAL
+    Variable Should Exist    ${status_serwisu}
+    Variable Should Not Exist    ${nieistniejaca_zmienna_konfiguracyjna}
+```
+
+```python
+# config/env_data.py - plik zmiennych ladowany przez "Variables    config/env_data.py"
+ZMIENNA_Z_KONFIGA = "wartosc-z-pliku-py"
+SRODOWISKA = {
+    "dev": {"url": "https://dev.example.com", "timeout": 10},
+    "prod": {"url": "https://example.com", "timeout": 30},
+}
+```
+
+## 4. Najczestsze bledy
+- Uzywanie VAR bez `scope=` tam, gdzie stary kod korzystal z Set Suite/Global
+  Variable - zmienna zostaje LOCAL i "znika" w kolejnym kroku/tescie, co
+  wyglada jak losowy blad.
+- Naduzywanie ${{ python_expr }} do skomplikowanej logiki biznesowej - taki
+  kod trudno czytac i debugowac w pliku .robot; zlozona logika powinna
+  trafic do Custom Keyword w Pythonie.
+- Zakladanie, ze plik zmiennych .py/.yaml zostanie automatycznie przeladowany
+  przy zmianie w trakcie wykonania suite'u - jest wczytywany raz, na starcie.
+- Mieszanie w jednym repo starej (Set Test Variable) i nowej (VAR) skladni
+  bez konsekwencji - utrudnia onboarding i code review, warto ujednolicic
+  konwencje w calym projekcie.
+- Pomijanie wartosci domyslnej w Get Variable Value, gdy zalezy nam na
+  wykryciu literowki w nazwie zmiennej - bez niej dostajemy cicho ${None}
+  zamiast czytelnego bledu.
+
+## 5. Ulepszenia z AI
+- Wklej fragment starego kodu z Set Test/Suite/Global Variable i poproś
+  Claude/Copilot o migracje na skladnie VAR z poprawnie dobranym `scope=`.
+- Wklej zlozona strukture danych (np. JSON z konfiguracja srodowisk) i
+  poproś AI o wygenerowanie gotowego pliku zmiennych .py lub .yaml.
+- Poproś o wyjasnienie, ktore zrodlo zmiennej "wygrywa" w konkretnym
+  przypadku (CLI -v, plik zmiennych, sekcja Variables, VAR w kodzie) - AI
+  szybko wskaze kolejnosc priorytetow dla podanego scenariusza.
+- Uzyj AI do przepisania zagniezdzonego Evaluate na czytelniejsze ${{ }}
+  (lub odwrotnie, gdy wyrazenie ${{ }} zrobilo sie zbyt zlozone).
+- Poproś o wygenerowanie testow negatywnych z Variable Should Not Exist dla
+  krytycznych zmiennych konfiguracyjnych, ktore nie powinny "przeciekac"
+  miedzy suite'ami.
+
+## Zadanie na dzis
+Napisz test, ktory: (1) ustawia zmienna przez VAR z jawnym `scope=SUITE` i
+odczytuje ja w drugim tescie tego samego suite'u, (2) uzywa wyrazenia
+${{ }} do przetworzenia listy (np. przefiltrowania lub podniesienia do
+kwadratu elementow), (3) sprawdza przez Get Variable Value wartosc
+nieistniejacej zmiennej z podana wartoscia domyslna.
+
+================================================================================
