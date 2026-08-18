@@ -1958,3 +1958,110 @@ kwadratu elementow), (3) sprawdza przez Get Variable Value wartosc
 nieistniejacej zmiennej z podana wartoscia domyslna.
 
 ================================================================================
+# Dzien 22 (2026-08-18, wtorek) - Test/Suite/Task setup i teardown (runda 2: hierarchia suite'ow, [Teardown] na keywordach, zmienne ${TEST_STATUS})
+
+## 1. Temat dnia
+Druga runda tematu setup/teardown - mniej oczywiste aspekty: dziedziczenie
+Suite Setup/Teardown w hierarchii katalogow (przez __init__.robot), teardown
+zdefiniowany bezposrednio na wlasnym slowie kluczowym (nie tylko na tescie),
+wbudowane zmienne dostepne wylacznie w teardownie (${TEST_STATUS},
+${TEST_MESSAGE}) oraz zachowanie frameworka, gdy Suite Setup zawiedzie.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Plik __init__.robot umieszczony w katalogu z testami definiuje Suite
+  Setup/Suite Teardown dla CALEGO katalogu (suite'u nadrzednego) - wykonuje
+  sie raz przed/po wszystkich plikach .robot w tym katalogu, niezaleznie od
+  Suite Setup/Teardown zdefiniowanych w poszczegolnych plikach.
+- Jesli Suite Setup zakonczy sie bledem, wszystkie testy w danym suite
+  (i podsuite'ach) sa automatycznie oznaczane jako nieudane BEZ ich
+  faktycznego wykonania - ale Suite Teardown i tak sie wykona, wiec to
+  wlasciwe miejsce na sprzatanie zasobow otwartych czesciowo w Setup.
+- Od RF 4.0 slowo kluczowe uzytkownika (*** Keywords ***) moze miec wlasny
+  [Teardown] - wykonuje sie po kazdym wywolaniu tego keyworda, nawet gdy
+  keyword rzuci wyjatek, co pozwala sprzatac zasoby lokalne dla konkretnego
+  keyworda niezaleznie od teardownu calego testu.
+- W Test Teardown/[Teardown] (ale NIE w Test Setup) dostepne sa specjalne
+  zmienne: ${TEST_STATUS} (PASS/FAIL), ${TEST_MESSAGE} (tresc bledu) oraz
+  @{TEST_TAGS} - pozwalaja warunkowo wykonywac dodatkowe kroki (np. zrzut
+  ekranu) na podstawie wyniku testu bez uzywania Run Keyword If Test Failed.
+- Opcja `--SkipTeardownOnExit` pomija wszystkie teardowny przy przerwaniu
+  wykonania (np. Ctrl+C) - przydatna przy debugowaniu, ale w CI/CD nie
+  powinna byc domyslnie wlaczona, bo zostawia niezamkniete zasoby (np.
+  przegladarki, polaczenia sieciowe).
+
+## 3. Przykladowy kod
+```robotframework
+*** Settings ***
+Library      SeleniumLibrary
+Suite Setup       Log    Setup calego katalogu z __init__.robot (przyklad)
+Test Teardown     Zaloguj wynik testu
+
+*** Test Cases ***
+Test wykorzystujacy TEST_STATUS w teardownie
+    [Documentation]    Teardown w Settings automatycznie widzi wynik testu.
+    Should Be Equal    1    1
+
+Test celowo nieudany
+    [Documentation]    Pokazuje TEST_MESSAGE dostepne tylko w teardownie.
+    Fail    Celowy blad do demonstracji zmiennych teardownu
+
+*** Keywords ***
+Zaloguj wynik testu
+    Log    Status testu: ${TEST_STATUS}
+    Run Keyword If    '${TEST_STATUS}' == 'FAIL'    Zrzut ekranu z komunikatem
+
+Zrzut ekranu z komunikatem
+    Log    Test nieudany, powod: ${TEST_MESSAGE}
+
+Otworz plik tymczasowy
+    [Documentation]    Keyword z wlasnym teardownem - sprzata sie sam.
+    [Teardown]    Log    Sprzatanie po "Otworz plik tymczasowy" wykonane
+    Log    Symulacja otwarcia zasobu wewnatrz keyworda
+```
+
+```robotframework
+# __init__.robot - w katalogu z plikami testowymi definiuje Suite Setup/Teardown
+# dla calego katalogu (suite'u nadrzednego), wspolny dla wszystkich plikow .robot w nim.
+*** Settings ***
+Suite Setup       Log    Wspolny setup dla calego katalogu testow
+Suite Teardown    Log    Wspolne sprzatanie po wszystkich plikach w katalogu
+```
+
+## 4. Najczestsze bledy
+- Proba odczytania ${TEST_STATUS}/${TEST_MESSAGE} w Test Setup lub w ciele
+  testu - te zmienne istnieja wylacznie w kontekscie teardownu, wczesniej
+  wynik testu jeszcze nie jest znany.
+- Zapomnienie, ze __init__.robot dziala TYLKO jako Suite Setup/Teardown
+  katalogu (nie mozna w nim definiowac *** Test Cases ***) - proba dodania
+  tam testow konczy sie bledem parsowania suite'u.
+- Zakladanie, ze skoro Suite Setup sie nie powiodl, testy "po prostu sie nie
+  wykonaja" bez sladu w raporcie - w rzeczywistosci wszystkie sa oznaczone
+  jako FAIL z komunikatem o bledzie Suite Setup, co warto uwzglednic przy
+  analizie duzej liczby czerwonych testow naraz.
+- Uzywanie --SkipTeardownOnExit w pipeline'ach CI/CD "na wszelki wypadek" -
+  przy przerwaniu joba (np. timeout) zasoby typu przegladarka czy sesja
+  API zostaja niezamkniete i moga zaburzac kolejne uruchomienia.
+
+## 5. Ulepszenia z AI
+- Poproś Claude/Copilot o przeanalizowanie struktury katalogow testow i
+  zaproponowanie, ktore wspolne Setup/Teardown warto przeniesc do
+  __init__.robot zamiast powielac je w kazdym pliku .robot.
+- Wklej log z nieudanego Suite Setup i poproś AI o wskazanie, czy przyczyna
+  lezy w samym Setup, czy to efekt kaskadowy (np. brakujacy plik konfiguracyjny),
+  oraz o propozycje bezpieczniejszego teardownu sprzatajacego czesciowo
+  zainicjalizowane zasoby.
+- Uzyj AI do wygenerowania [Teardown] dla wlasnych keywordow, ktore otwieraja
+  zasoby (polaczenia, pliki, sesje) - opisz keyword w jezyku naturalnym, a AI
+  zaproponuje symetryczny teardown.
+- Poproś AI o przygotowanie listy przypadkow testowych sprawdzajacych
+  poprawnosc dziedziczenia Setup/Teardown w hierarchii suite'ow (katalog +
+  podkatalog + plik), zeby zweryfikowac kolejnosc wykonania.
+
+## Zadanie na dzis
+Stworz strukture katalogow z plikiem __init__.robot definiujacym wspolny
+Suite Setup/Teardown oraz jednym plikiem .robot zawierajacym: (1) test
+korzystajacy z ${TEST_STATUS} i ${TEST_MESSAGE} w Test Teardown, (2) wlasny
+keyword z lokalnym [Teardown], ktory sprzata swoj zasob niezaleznie od
+wyniku calego testu.
+
+================================================================================
