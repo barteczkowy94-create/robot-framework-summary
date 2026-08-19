@@ -2065,3 +2065,110 @@ keyword z lokalnym [Teardown], ktory sprzata swoj zasob niezaleznie od
 wyniku calego testu.
 
 ================================================================================
+
+# Dzien 23 (2026-08-19, sroda) - Biblioteki standardowe runda 2 (mniej oczywiste keywordy Collections, String, OperatingSystem, DateTime)
+
+## 1. Temat dnia
+Druga runda bibliotek standardowych - tym razem mniej oczywiste, ale przydatne
+keywordy: bezpieczne pobieranie wartosci ze slownika z domyslna wartoscia,
+sortowanie i wycinki list, wyrazenia regularne w String, kopiowanie plikow
+i legacy Run w OperatingSystem, a takze roznica dwoch dat (Timedelta) w
+DateTime.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Get From Dictionary z parametrem default pozwala uniknac bledu przy
+  brakujacym kluczu - czytelniejsze niz reczne sprawdzanie obecnosci klucza
+  przez Run Keyword If i wyrazenie Pythona.
+- Sort List sortuje liste w miejscu (in-place, modyfikuje oryginalna zmienna
+  i zwraca None), a Get Slice From List zwraca nowa liste-fragment bez
+  modyfikowania oryginalu - warto pamietac, ktory keyword ma efekt uboczny.
+- Get Regexp Matches i Replace String Using Regexp z biblioteki String
+  pozwalaja wyciagac/podmieniac fragmenty tekstu wzorcem regex - przydatne
+  przy parsowaniu odpowiedzi API czy logow, gdzie Split String nie wystarczy.
+- OperatingSystem.Run to przestarzale, blokujace wywolanie polecen
+  systemowych bez kontroli nad timeoutem i strumieniami - do uruchamiania
+  procesow zewnetrznych w nowych testach lepiej uzyc biblioteki Process
+  (Run Process), a OperatingSystem.Run traktowac jako legacy.
+- Subtract Date From Date zwraca roznice miedzy datami w sekundach - do
+  czytelnej prezentacji uzyj Convert Time z result_format=verbose zamiast
+  recznie przeliczac sekundy na godziny/minuty.
+
+## 3. Przykladowy kod
+```robotframework
+*** Settings ***
+Library    Collections
+Library    String
+Library    OperatingSystem
+Library    DateTime
+
+*** Test Cases ***
+Bezpieczny dostep do slownika i operacje na liscie
+    [Documentation]    Get From Dictionary z domyslna wartoscia, Sort List i Get Slice From List.
+    &{uzytkownik}=    Create Dictionary    imie=Anna    wiek=28
+    ${miasto}=    Get From Dictionary    ${uzytkownik}    miasto    default=Nieznane
+    Should Be Equal    ${miasto}    Nieznane
+
+    @{liczby}=    Create List    5    1    4    2    3
+    Sort List    ${liczby}
+    Should Be Equal As Strings    ${liczby}    ['1', '2', '3', '4', '5']
+
+    @{fragment}=    Get Slice From List    ${liczby}    1    3
+    Log    Wycinek listy: ${fragment}
+
+Regex w Stringu i operacje na plikach
+    [Documentation]    Wyrazenia regularne oraz kopiowanie plikow przez OperatingSystem.
+    ${log}=    Set Variable    Blad 404: strona nie znaleziona, kod=404
+    @{kody}=    Get Regexp Matches    ${log}    kod=(\\d+)    1
+    Should Be Equal    ${kody}[0]    404
+
+    Create File    ${OUTPUT_DIR}/dane.txt    Zawartosc pliku zrodlowego
+    Copy File    ${OUTPUT_DIR}/dane.txt    ${OUTPUT_DIR}/kopia_dane.txt
+    File Should Exist    ${OUTPUT_DIR}/kopia_dane.txt
+
+Roznica dat i czytelny czas trwania
+    [Documentation]    Subtract Date From Date i Convert Time do prezentacji roznicy.
+    ${start}=    Set Variable    2026-08-19 08:00:00
+    ${koniec}=    Set Variable    2026-08-19 10:30:00
+    ${roznica_sek}=    Subtract Date From Date    ${koniec}    ${start}
+    ${roznica_czytelna}=    Convert Time    ${roznica_sek}    result_format=verbose
+    Log    Czas trwania: ${roznica_czytelna}
+```
+
+## 4. Najczestsze bledy
+- Uzywanie Get From Dictionary bez default tam, gdzie klucz moze nie
+  istniec - test pada bledem zamiast swiadomej obslugi brakujacej wartosci.
+- Zakladanie, ze Sort List zwraca nowa posortowana liste - w rzeczywistosci
+  sortuje w miejscu i zwraca None, wiec przypisanie wyniku do nowej
+  zmiennej daje ${None} zamiast posortowanej listy.
+- Uzywanie OperatingSystem.Run do uruchamiania dlugotrwalych procesow (np.
+  serwera testowego) - brak kontroli nad timeoutem/wyjsciem procesu
+  prowadzi do zawieszania sie calego przebiegu testow.
+- Parsowanie zlozonych struktur tekstu recznymi wywolaniami Split String
+  zamiast Get Regexp Matches - kod staje sie krucha seria warunkow zamiast
+  jednego czytelnego wzorca regex.
+- Podawanie do Subtract Date From Date dat w roznych formatach lub strefach
+  czasowych bez ujednolicenia - roznica wychodzi bledna, a blad latwo
+  przeoczyc, bo test i tak formalnie "przechodzi".
+
+## 5. Ulepszenia z AI
+- Wklej fragment logu/tekstu (np. odpowiedz API) i poproś Claude/Copilot o
+  zaproponowanie wzorca regex do Get Regexp Matches/Replace String Using
+  Regexp wyciagajacego konkretne dane.
+- Poproś AI o przejrzenie istniejacych testow pod katem miejsc, gdzie Get
+  From Dictionary powinien miec parametr default, zeby test nie padal na
+  brakujacym, opcjonalnym polu.
+- Uzyj AI do zamiany starych wywolan OperatingSystem.Run na odpowiednik z
+  biblioteki Process (Run Process) wraz z sensownym timeoutem.
+- Poproś AI o wygenerowanie zestawu przypadkow testowych na roznice dat
+  (Subtract Date From Date) obejmujacych rozne strefy czasowe i formaty
+  wejsciowe.
+
+## Zadanie na dzis
+Napisz test, ktory: (1) pobierze wartosc ze slownika przez Get From
+Dictionary z domyslna wartoscia dla nieistniejacego klucza, (2) posortuje
+liste liczb przez Sort List i pobierze jej fragment przez Get Slice From
+List, (3) wyciagnie kod bledu z przykladowego tekstu logu przez Get Regexp
+Matches, (4) obliczy i wypisze czytelna roznice miedzy dwiema datami przez
+Subtract Date From Date i Convert Time.
+
+================================================================================
