@@ -2172,3 +2172,108 @@ Matches, (4) obliczy i wypisze czytelna roznice miedzy dwiema datami przez
 Subtract Date From Date i Convert Time.
 
 ================================================================================
+
+# Dzien 24 (2026-08-20, czwartek) - Testy webowe - Browser Library (Playwright) runda 2 (konteksty, iframe'y, mockowanie sieci, upload plikow)
+
+## 1. Temat dnia
+Druga runda testow webowych - tym razem mniej oczywiste, ale praktyczne
+mozliwosci Browser Library: izolowane konteksty przegladarki (wielu
+"uzytkownikow" w jednej przegladarce), praca z elementami wewnatrz iframe,
+synchronizacja testu z rzeczywistym wywolaniem API przez Wait For
+Response/Request oraz upload plikow przez Choose File.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- New Context tworzy izolowana sesje (ciasteczka, localStorage) w ramach
+  jednej uruchomionej przegladarki - pozwala testowac wielu "uzytkownikow"
+  jednoczesnie bez kosztownego otwierania kilku oddzielnych przegladarek.
+- Do synchronizacji z zadaniem API po akcji (np. kliknieciu) uzywaj
+  Promise To Wait For Response PRZED akcja wyzwalajaca, a nastepnie Wait
+  For All Promises - unika to wyscigu (race condition), gdzie odpowiedz
+  przychodzi zanim keyword zaczal nasluchiwac.
+- Elementy wewnatrz <iframe> adresuj selektorem z separatorem `>>>`
+  (np. `iframe#platnosc >>> button#zatwierdz`) - Browser Library domyslnie
+  szuka elementow tylko w glownym dokumencie strony.
+- Po utworzeniu kilku kontekstow/stron pamietaj o Switch Context/Switch
+  Page - kolejne keywordy dzialaja domyslnie na ostatnio aktywnej stronie,
+  wiec bez przelaczenia akcje trafiaja do niewlasciwego "uzytkownika".
+- Parametr screenshot_on_failure (domyslnie wlaczony) automatycznie zapisuje
+  zrzut ekranu do log.html przy niepowodzeniu kroku - nie wylaczaj go w
+  CI "dla przyspieszenia", bo traci sie kluczowa informacje diagnostyczna.
+
+## 3. Przykladowy kod
+```robotframework
+*** Settings ***
+Library    Browser
+Suite Setup       New Browser    chromium    headless=true
+Suite Teardown    Close Browser
+
+*** Test Cases ***
+Dwie niezalezne sesje w jednej przegladarce
+    [Documentation]    New Context izoluje dane miedzy "uzytkownikami".
+    New Context    alias=sesja_a
+    New Page    https://example.com/login
+    Fill Text    css=#username    uzytkownik_a
+    Click    css=#login-button
+
+    New Context    alias=sesja_b
+    New Page    https://example.com/login
+    Fill Text    css=#username    uzytkownik_b
+    Click    css=#login-button
+
+    Switch Context    sesja_a
+    Get Text    css=.welcome    contains    uzytkownik_a
+
+Synchronizacja z odpowiedzia API po kliknieciu
+    [Documentation]    Promise To Wait For Response + Wait For All Promises unika race condition.
+    New Page    https://example.com/zamowienia
+    ${promise}=    Promise To Wait For Response    matcher=**/api/orders    timeout=10s
+    Click    css=#odswiez-zamowienia
+    ${response}=    Wait For    ${promise}
+    Should Be Equal As Integers    ${response}[status]    200
+
+Upload pliku i element wewnatrz iframe
+    [Documentation]    Choose File do wysylki pliku, selektor iframe przez >>>.
+    New Page    https://example.com/formularz
+    Choose File    css=input[type="file"]    ${CURDIR}/dane/raport.pdf
+    Click    iframe#platnosc >>> button#zatwierdz
+    Get Text    css=.upload-status    ==    Plik przeslany
+```
+
+## 4. Najczestsze bledy
+- Wywolywanie Wait For Response dopiero PO akcji wyzwalajacej zadanie (np.
+  po Click) zamiast uzycia Promise To Wait For Response przed akcja - w
+  szybkiej sieci odpowiedz moze przyjsc zanim test zaczal nasluchiwac,
+  co daje losowe, trudne do powtorzenia timeouty.
+- Adresowanie elementu w iframe zwyklym selektorem CSS bez `>>>` - Browser
+  Library nie znajdzie elementu, bo szuka wylacznie w glownym dokumencie.
+- Podawanie do Choose File sciezki wzglednej zamiast ${CURDIR}/... - test
+  dziala lokalnie, ale pada w CI, gdzie katalog roboczy jest inny.
+- Zapominanie o Switch Context/Switch Page po utworzeniu kilku kontekstow -
+  kolejne kroki wykonuja sie na ostatnio otwartej stronie, przez co test
+  "po cichu" operuje na zlym uzytkowniku.
+- Wylaczanie screenshot_on_failure w pipeline'ach CI w imie szybkosci -
+  utrudnia to diagnoze niestabilnych testow, gdy nie ma podgladu na zywo.
+
+## 5. Ulepszenia z AI
+- Wklej definicje endpointu z dokumentacji API (np. Swagger/OpenAPI) i
+  poproś Claude/Copilot o poprawny wzorzec (matcher) z wildcardami do
+  Wait For Response/Promise To Wait For Response.
+- Poproś AI o przeanalizowanie logu sieciowego z nieudanego testu (np.
+  eksportu z log.html) i wskazanie, ktore zadanie API nie zwrocilo
+  oczekiwanego statusu lub czasu odpowiedzi.
+- Uzyj AI do wygenerowania scenariuszy wieloużytkownikowych (rozne
+  konteksty przegladarki) na podstawie jednego dzialajacego testu logowania.
+- Poproś AI o zaproponowanie selektora przechodzacego przez iframe na
+  podstawie zrzutu struktury DOM strony z ramka.
+- Poproś AI o wygenerowanie testu upload/download plikow wraz z
+  asercjami sprawdzajacymi poprawnosc wyslanego/pobranego pliku.
+
+## Zadanie na dzis
+Napisz test w Browser Library, ktory: (1) tworzy dwa niezalezne konteksty
+przegladarki symulujace dwoch uzytkownikow i sprawdza, ze dane jednego nie
+"przeciekaja" do drugiego, (2) synchronizuje test z odpowiedzia API przez
+Promise To Wait For Response + Wait For All Promises po kliknieciu
+przycisku, (3) wysyla plik przez Choose File i weryfikuje komunikat
+potwierdzenia, (4) klika element wewnatrz iframe uzywajac selektora z `>>>`.
+
+================================================================================
