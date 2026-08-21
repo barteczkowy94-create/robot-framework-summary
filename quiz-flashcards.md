@@ -187,6 +187,7 @@
 
 ## Tydzien 4 - Quiz (sobota, 2026-08-15) - Dni 16-18
 
+
 1. Co jest glownym celem wzorca Page Object w projektach Robot Framework?
    a) Przyspieszenie uruchamiania testow  b) Oddzielenie locatorow/logiki
       strony od kroków testowych, zeby zmiana UI wymagala edycji w jednym
@@ -258,5 +259,85 @@
 - Struktura projektu (`tests/`, `resources/`, `results/`) -> rozdziela kod
   testow, wspoldzielone keywordy/Page Objecty i generowane wyniki (te
   ostatnie zwykle w `.gitignore`)
+
+================================================================================
+
+## Tydzien 5 - Quiz (piatek, 2026-08-21) - Dni 19-23
+
+1. Do czego sluzy pole `Metadata` w sekcji `*** Settings ***`?
+   a) Definiuje zmienne globalne  b) Dodaje dodatkowe informacje (autor,
+      wersja) widoczne w `report.html`  c) Importuje biblioteke  d) Ustawia
+      tagi dla wszystkich testow
+
+2. Czym sa prefiksy `Given`/`When`/`Then` przy nazwach keywordow w stylu BDD?
+   a) Osobnymi slowami kluczowymi wymagajacymi rejestracji  b) Czysto
+      kosmetyczna konwencja - RF pomija je przy dopasowywaniu nazwy
+      keywordu  c) Dzialaja wylacznie w plikach Resource  d) Wymagaja
+      dedykowanej biblioteki BDD
+
+3. Ktory keyword BuiltIn zastepuje reczna petle z `Sleep` czekajaca na
+   spelnienie warunku (np. gotowosc zasobu)?
+   a) `Repeat Keyword`  b) `Wait Until Keyword Succeeds`  c) `Run Keyword If`
+   d) `Sleep Until True`
+
+4. Czym rozni sie `Skip` od `Pass Execution`?
+   a) Niczym, to synonimy  b) `Skip` oznacza test jako SKIP, `Pass
+      Execution` wymusza PASS mimo niewykonania reszty kroku  c) `Skip`
+      dziala tylko w `*** Tasks ***`  d) `Pass Execution` zatrzymuje caly
+      suite
+
+5. Jakie slowo kluczowe w RF 7.0+ zastepuje `Set Test/Suite/Global
+   Variable`?
+   a) `Set Variable If`  b) `VAR` z argumentem `scope=`  c) `Evaluate`
+   d) `Create Variable`
+
+6. Jaki jest domyslny zasieg zmiennej ustawionej przez `VAR` bez podania
+   `scope=`?
+   a) GLOBAL  b) SUITE  c) LOCAL  d) TEST
+
+7. W ktorym pliku definiuje sie `Suite Setup`/`Suite Teardown` wspolny dla
+   calego katalogu testow (nie pojedynczego pliku)?
+   a) `conftest.robot`  b) `__init__.robot`  c) `common.resource`
+   d) `suite.yaml`
+
+8. Gdzie dostepne sa zmienne `${TEST_STATUS}` i `${TEST_MESSAGE}`?
+   a) W kazdym kroku kazdego testu  b) Tylko w `Test Teardown`  c) Tylko w
+      `Suite Setup`  d) Tylko w plikach Resource
+
+9. Co zwraca `Get From Dictionary` z parametrem `default`, gdy podany klucz
+   nie istnieje w slowniku?
+   a) Zawsze rzuca blad  b) Zawsze zwraca `None`  c) Zwraca podana wartosc
+      domyslna zamiast rzucac blad  d) Usuwa caly slownik
+
+10. Jak zachowuje sie `Sort List` wzgledem oryginalnej listy?
+    a) Zwraca nowa, posortowana liste, nie zmieniajac oryginalu  b) Sortuje
+       liste w miejscu (in-place) i zwraca `None`  c) Dziala wylacznie na
+       listach liczb  d) Wymaga biblioteki `String`
+
+**Odpowiedzi:** 1-b, 2-b, 3-b, 4-b, 5-b, 6-c, 7-b, 8-b, 9-c, 10-b
+
+## Tydzien 5 - Fiszki
+
+- `Metadata` (Settings) -> dodatkowe informacje (autor, wersja) widoczne w
+  `report.html`, niezalezne od `[Tags]`
+- `Given`/`When`/`Then`/`And`/`But` -> tylko konwencja nazewnicza, RF
+  ignoruje te prefiksy przy dopasowywaniu keywordu
+- `Wait Until Keyword Succeeds` (np. `5x    1s`) -> dynamiczny retry z
+  limitem czasu zamiast sztywnego `Sleep`
+- `Skip`/`Skip If` vs `Pass Execution` -> `Skip` = wynik SKIP w raporcie,
+  `Pass Execution` = wymuszony PASS mimo niewykonania reszty kroku
+- `VAR    ${x}    wartosc    scope=LOCAL|TEST|SUITE|GLOBAL` (RF 7.0+) ->
+  nowoczesny zamiennik `Set Test/Suite/Global Variable`, domyslnie LOCAL
+- `${{ python_expr }}` -> wyrazenie Python wprost w miejscu uzycia zmiennej
+  (dla prostych obliczen), `Get Variable Value` -> bezpieczny odczyt z
+  wartoscia domyslna
+- `__init__.robot` -> `Suite Setup`/`Suite Teardown` dla calego katalogu
+  (nie moze zawierac `*** Test Cases ***`)
+- `${TEST_STATUS}` / `${TEST_MESSAGE}` -> dostepne wylacznie w `Test
+  Teardown`, pokazuja wynik i komunikat bledu dopiero co zakonczonego testu
+- `Get From Dictionary    ...    default=` -> bezpieczny odczyt klucza bez
+  ryzyka bledu przy jego braku
+- `Sort List` -> in-place, zwraca `None`; `Get Slice From List` -> nowa
+  lista-fragment bez modyfikacji oryginalu
 
 ================================================================================

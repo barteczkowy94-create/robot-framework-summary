@@ -2172,3 +2172,104 @@ Matches, (4) obliczy i wypisze czytelna roznice miedzy dwiema datami przez
 Subtract Date From Date i Convert Time.
 
 ================================================================================
+# Dzien 24 (2026-08-21, piatek) - Testy webowe: Browser Library / SeleniumLibrary runda 2 (selektory, strict mode, wiele kontekstow, Wait For Response)
+
+## 1. Temat dnia
+Druga runda testow webowych - tym razem mniej oczywiste, ale codzienne
+narzedzia Browser Library (Playwright): selektory oparte o tekst/role
+zamiast surowego CSS, wbudowane operatory asercji w keywordach Get *,
+"strict mode" przy niejednoznacznych selektorach, praca z wieloma
+kontekstami/kartami przegladarki oraz synchronizacja z zapytaniami
+sieciowymi przez Wait For Response.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Wybieraj selektory widoczne dla uzytkownika (`text=`, role/testid) zamiast
+  CSS opartego o strukture DOM - `text=Zaloguj sie` przetrwa zmiane klas
+  CSS, w przeciwienstwie do `css=div > div:nth-child(3) > button`.
+- Get Text/Get Attribute przyjmuja operator asercji (`==`, `contains`,
+  `^=`, `$=`) jako drugi argument - jeden keyword robi pobranie i asercje
+  naraz, bez osobnego Should Be Equal/Should Contain.
+- Playwright dziala w "strict mode": gdy selektor pasuje do wiecej niz
+  jednego elementu, keyword rzuca blad zamiast po cichu wybrac pierwszy -
+  zawez selektor (np. `>> nth=0`) tylko swiadomie, a nie jako obejscie.
+- New Context izoluje ciasteczka/local storage miedzy "uzytkownikami" w
+  jednym tescie (np. dwoch zalogowanych rownolegle), a Switch Page
+  przelacza sie na karte otwarta przez link z `target=_blank`.
+- Wait For Response/Wait For Request synchronizuje test z konkretnym
+  zadaniem API wywolanym przez UI - czytelniejsze i bardziej odporne niz
+  Sleep zgadujacy, kiedy backend odpowie.
+
+## 3. Przykladowy kod
+```robotframework
+*** Settings ***
+Library    Browser
+
+*** Test Cases ***
+Dwaj niezalezni uzytkownicy w osobnych kontekstach
+    [Documentation]    New Context izoluje sesje dwoch uzytkownikow.
+    ${admin_ctx}=    New Context
+    New Page    https://example.com/login    context=${admin_ctx}
+    Fill Text    css=#username    admin
+    Fill Text    css=#password    HasloAdmina1
+    Click    text=Zaloguj sie
+    Get Text    text=Panel administratora    contains    Panel
+
+    ${user_ctx}=    New Context
+    New Page    https://example.com/login    context=${user_ctx}
+    Fill Text    css=#username    jan.kowalski
+    Fill Text    css=#password    TajneHaslo123
+    Click    text=Zaloguj sie
+    Get Text    css=.welcome-message    contains    Witaj, Jan
+
+Oczekiwanie na odpowiedz API przed sprawdzeniem UI
+    [Documentation]    Wait For Response zamiast Sleep po kliknieciu przycisku.
+    New Page    https://example.com/zamowienia
+    ${response}=    Promise To    Wait For Response    matcher=**/api/zamowienia**
+    Click    text=Odswiez zamowienia
+    ${odpowiedz}=    Wait For    ${response}
+    Should Be Equal As Integers    ${odpowiedz.status}    200
+    Get Text    css=.orders-count    should not be    0
+
+Zawezenie selektora przy strict mode violation
+    [Documentation]    Kilka przyciskow "Usun" na liscie - trzeba zawezic selektor.
+    New Page    https://example.com/lista
+    Click    css=tr:has-text("Zamowienie #123") >> text=Usun
+```
+
+## 4. Najczestsze bledy
+- Ignorowanie bledu "strict mode violation" i proba "naprawy" przez dodanie
+  Sleep - problem to niejednoznaczny selektor, nie timing, wiec Sleep nic
+  nie zmienia.
+- Klikanie linku otwierajacego nowa karte (`target=_blank`) i dalsza praca
+  na starej stronie bez Switch Page - komendy trafiaja w karte, ktora juz
+  nie jest aktywna.
+- Uzywanie Sleep po kliknieciu przycisku wywolujacego zapytanie API zamiast
+  Wait For Response - test jest wolny (za duzy zapas czasu) albo niestabilny
+  (za maly zapas czasu).
+- Wspoldzielenie jednego kontekstu/strony miedzy scenariuszami "dwoch
+  uzytkownikow" - ciasteczka/sesja jednego nadpisuja drugiego, testy
+  wzajemnie sie zaburzaja.
+- Wylaczanie automatycznych zrzutow ekranu przy bledzie "dla przyspieszenia
+  CI" - traci sie najwazniejszy artefakt do szybkiej diagnozy failujacego
+  testu w log.html.
+
+## 5. Ulepszenia z AI
+- Wklej fragment HTML elementu do Claude/Copilot i poproś o zaproponowanie
+  selektora opartego o tekst/role zamiast kruchego CSS z pozycja w DOM.
+- Wklej komunikat bledu "strict mode violation" wraz z fragmentem HTML i
+  poproś AI o zaproponowanie zawezonego, jednoznacznego selektora.
+- Poproś AI o wygenerowanie scenariusza testowego z dwoma niezaleznymi
+  kontekstami (New Context) na podstawie opisu funkcjonalnosci wielu roli.
+- Wklej liste endpointow API wywolywanych przez UI i poproś o wygenerowanie
+  Wait For Response z poprawnym matcherem URL zamiast Sleep.
+- Wklej zrzut ekranu z nieudanego testu (Take Screenshot) i poproś AI o
+  wskazanie prawdopodobnej przyczyny (np. modal zaslaniajacy element).
+
+## Zadanie na dzis
+Napisz test Browser Library, ktory: (1) otwiera dwa niezalezne konteksty
+(New Context) symulujace dwoch roznych uzytkownikow i weryfikuje w kazdym
+inny komunikat powitalny przez Get Text z operatorem `contains`, (2) w
+osobnym tescie klika przycisk wywolujacy zapytanie API i uzywa Wait For
+Response zamiast Sleep przed sprawdzeniem wyniku na stronie.
+
+================================================================================
