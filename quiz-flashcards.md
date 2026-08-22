@@ -260,3 +260,72 @@
   ostatnie zwykle w `.gitignore`)
 
 ================================================================================
+
+## Tydzien 5 - Quiz (sobota, 2026-08-22) - Dni 19-23
+
+1. Do czego oprocz Library sluzy sekcja *** Settings ***?
+   a) Tylko do importu bibliotek  b) Rowniez do Resource, Variables,
+      Metadata oraz Suite/Test Setup/Teardown i Test Tags  c) Tylko do
+      zmiennych  d) Tylko do tagowania testow
+
+2. Czym sa "embedded arguments" w Robot Framework?
+   a) Argumentami wplecionymi bezposrednio w nazwe slowa kluczowego (np.
+      "Zaloguj jako ${rola}")  b) Zmiennymi srodowiskowymi  c) Argumentami
+      z linii polecen  d) Argumentami przekazywanymi tylko przez plik .yaml
+
+3. Kiedy warto uzyc Wait Until Keyword Succeeds zamiast Sleep?
+   a) Nigdy, Sleep jest zawsze lepszy  b) Gdy chcemy powtarzac wywolanie
+      keyworda az do sukcesu lub limitu prob/czasu, zamiast czekac sztywno
+      ustalony czas  c) Tylko w testach API  d) Tylko razem z Run Keywords
+
+4. Jaki jest domyslny zasieg (scope) zmiennej ustawionej przez VAR bez
+   podania parametru scope=?
+   a) GLOBAL  b) SUITE  c) LOCAL  d) TEST
+
+5. Co zwraca Get Variable Value, gdy podana zmienna nie istnieje i NIE
+   podano wartosci domyslnej?
+   a) Blad wykonania testu, ktory przerywa suite  b) Cicho ${None}  c) Pusty
+      string automatycznie konwertowany na 0  d) RF przerywa cale uruchomienie
+
+6. Co definiuje plik __init__.robot umieszczony w katalogu z testami i
+   czego NIE moze zawierac?
+   a) Definiuje Suite Setup/Teardown dla calego katalogu; nie moze zawierac
+      sekcji *** Test Cases ***  b) Definiuje pojedynczy test; moze zawierac
+      wszystko  c) Sluzy tylko do importu bibliotek  d) Jest wymagany w
+      kazdym katalogu z testami
+
+7. W ktorym miejscu testu dostepne sa zmienne ${TEST_STATUS} i
+   ${TEST_MESSAGE}?
+   a) W dowolnym miejscu testu, od poczatku  b) Tylko w Test Setup
+   c) Wylacznie w Test Teardown / [Teardown] - po zakonczeniu wykonania
+      testu  d) Tylko w Suite Setup
+
+8. Co robi Get From Dictionary z parametrem default, gdy podany klucz nie
+   istnieje w slowniku?
+   a) Rzuca wyjatek  b) Zwraca wartosc domyslna zamiast rzucac blad
+   c) Zwraca None niezaleznie od default  d) Usuwa klucz ze slownika
+
+**Odpowiedzi:** 1-b, 2-a, 3-b, 4-c, 5-b, 6-a, 7-c, 8-b
+
+## Tydzien 5 - Fiszki
+
+- *** Settings *** -> obejmuje nie tylko Library, ale tez Resource,
+  Variables, Metadata, Suite/Test Setup/Teardown i Test Tags
+- Embedded arguments -> argument wpleciony w nazwe keyworda (np. "Zaloguj
+  jako ${rola}"), kod czyta sie jak zdanie
+- Prefiksy BDD (Given/When/Then/And/But) -> czysto kosmetyczne, RF je
+  ignoruje przy dopasowywaniu nazwy keyworda
+- Wait Until Keyword Succeeds -> retry z limitem prob/czasu (np. "5x 1s"),
+  lepsze niz Sleep przy niestabilnych/asynchronicznych zasobach
+- VAR (RF 7.0+) -> jedno slowo kluczowe zamiast Set Test/Suite/Global
+  Variable, zasieg przez scope=LOCAL|TEST|SUITE|GLOBAL (domyslnie LOCAL)
+- Get Variable Value -> bezpieczny odczyt zmiennej z wartoscia domyslna,
+  bez rzucania wyjatku jak przy zwyklym odwolaniu ${zmienna}
+- __init__.robot -> definiuje Suite Setup/Teardown dla calego katalogu,
+  nie moze zawierac wlasnych *** Test Cases ***
+- ${TEST_STATUS} / ${TEST_MESSAGE} -> dostepne wylacznie w Test Teardown/
+  [Teardown], nie w Test Setup ani w ciele testu
+- Get From Dictionary z default -> unika bledu przy brakujacym kluczu,
+  zwraca wartosc domyslna zamiast rzucac wyjatek
+- Sort List -> sortuje liste w miejscu (in-place) i zwraca None - nie
+  przypisuj wyniku do nowej zmiennej

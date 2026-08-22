@@ -2172,3 +2172,114 @@ Matches, (4) obliczy i wypisze czytelna roznice miedzy dwiema datami przez
 Subtract Date From Date i Convert Time.
 
 ================================================================================
+# Dzien 24 (2026-08-22, sobota) - Testy webowe SeleniumLibrary/Browser Library runda 2 (iframe, upload plikow, mockowanie sieci, wiele kontekstow)
+
+## 1. Temat dnia
+Druga runda testow webowych - tym razem mniej oczywiste, ale czesto potrzebne
+mechanizmy Browser Library (Playwright): praca z elementami wewnatrz iframe,
+upload plikow, oczekiwanie na konkretne zadania sieciowe (Wait For Response)
+zamiast Sleep, izolacja sesji przez wiele kontekstow oraz Evaluate JavaScript
+jako "wyjscie awaryjne".
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Selektor elementu wewnatrz iframe buduje sie laczac selektor ramki i
+  elementu operatorem `>>>` (np. `iframe#platnosc >>> css=#numer-karty`) -
+  nie trzeba recznego przelaczania kontekstu jak w Selenium (Switch To Frame).
+- Do testowania uploadu plikow uzywaj keywordu `Upload File` wskazujac
+  sciezke lokalnego pliku - dziala nawet gdy input[type=file] jest ukryty
+  (display:none), bo Playwright operuje na API przegladarki, nie na
+  widocznosci elementu.
+- `Promise To    Wait For Response` trzeba zarejestrowac PRZED akcja, ktora
+  wywoluje zadanie sieciowe, a dopiero potem uzyc `Wait For` na zwroconym
+  promise - pozwala to poczekac na konkretne API zamiast zgadywac czas Sleep.
+- `New Context` + `New Page` izoluje ciasteczka/local storage miedzy
+  scenariuszami (np. rozni uzytkownicy) w jednym pliku testowym, bez potrzeby
+  restartowania calej przegladarki.
+- `Evaluate JavaScript` daje dostep do DOM/API przegladarki, gdy nie ma
+  gotowego keyworda (np. odczyt wartosci z localStorage) - traktuj to jako
+  wyjscie awaryjne, nie podstawowy sposob interakcji z aplikacja.
+
+## 3. Przykladowy kod
+```robotframework
+*** Settings ***
+Library    Browser
+
+Suite Setup       New Browser    chromium    headless=true
+Suite Teardown    Close Browser
+Test Setup        New Context    New Page    https://example.com/dashboard
+
+*** Test Cases ***
+Platnosc przez formularz osadzony w iframe
+    [Documentation]    Wypelnienie pola numeru karty osadzonego w iframe.
+    [Tags]    web    iframe
+    Fill Text    iframe#platnosc >>> css=#numer-karty    4111111111111111
+    Click    iframe#platnosc >>> css=#przycisk-zaplac
+    Get Text    css=.status-platnosci    ==    Platnosc zaakceptowana
+
+Upload zalacznika do formularza
+    [Documentation]    Upload pliku lokalnego przez ukryty input[type=file].
+    [Tags]    web    upload
+    Upload File    css=input[type="file"]    ${CURDIR}/testdata/cv.pdf
+    Click    css=#wyslij-formularz
+    Get Text    css=.potwierdzenie    contains    Plik zostal przeslany
+
+Oczekiwanie na odpowiedz API po kliknieciu
+    [Documentation]    Wait For Response zamiast Sleep po akcji wywolujacej zapytanie.
+    [Tags]    web    network
+    ${promise}=    Promise To    Wait For Response    matcher=**/api/zamowienia**
+    Click    css=#zloz-zamowienie
+    ${odpowiedz}=    Wait For    ${promise}
+    Should Be Equal As Integers    ${odpowiedz}[status]    201
+
+Dwaj uzytkownicy w niezaleznych kontekstach
+    [Documentation]    New Context izoluje sesje/ciasteczka miedzy "uzytkownikami".
+    [Tags]    web    multi-context
+    New Context
+    New Page    https://example.com/login
+    Fill Text    css=#login    admin
+
+    New Context
+    New Page    https://example.com/login
+    Fill Text    css=#login    gosc
+```
+
+## 4. Najczestsze bledy
+- Probowanie przelaczenia kontekstu do iframe osobnym keywordem (jak
+  Selenium Switch To Frame) - Browser Library nie ma takiego kroku, selektor
+  iframe laczy sie bezposrednio operatorem `>>>` z selektorem elementu.
+- Symulowanie uploadu przez reczne "przeciaganie" pliku zamiast Upload File -
+  niepotrzebnie komplikuje test i bywa niestabilne na roznych systemach.
+- Rejestrowanie `Promise To    Wait For Response` PO kliknieciu wywoluja-
+  cym zadanie - zadanie moze zdazyc wystartowac i zakonczyc sie, zanim
+  keyword zacznie nasluchiwac, przez co Wait For nigdy nie zlapie odpowiedzi.
+- Nadmierne poleganie na Evaluate JavaScript zamiast wbudowanych keywordow -
+  test przestaje byc czytelny dla osob nieznajacych JS i traci zalety
+  warstwy abstrakcji Browser Library.
+- Brak New Context per niezalezny scenariusz uzytkownika - testy "dziedzicza"
+  ciasteczka/sesje po sobie i wynik zaczyna zalezec od kolejnosci uruchomienia.
+
+## 5. Ulepszenia z AI
+- Wklej fragment HTML z zagniezdzonym iframe do AI i poproś o zlozenie
+  poprawnego selektora z operatorem `>>>` do konkretnego pola formularza.
+- Poproś AI o zaproponowanie matchera URL (wzorzec glob/regex) do Wait For
+  Response na podstawie przykladowego adresu zadania z zakladki Network w
+  devtools przegladarki.
+- Uzyj AI do wygenerowania scenariuszy testowych na upload plikow (zle
+  rozszerzenie, za duzy plik, pusty plik) na podstawie jednego dzialajacego
+  testu.
+- Poproś Claude/Copilot o przeanalizowanie loga bledu Browser Library (np.
+  timeout na Wait For Response) i zaproponowanie przyczyny (zly matcher,
+  akcja wywolana przed rejestracja Promise To).
+- Poproś AI o wygenerowanie Resource file z keywordami wysokiego poziomu
+  ("Zaloguj jako administrator", "Zaloguj jako gosc") opartymi na New
+  Context, zeby ukryc szczegoly izolacji sesji przed testami.
+
+## Zadanie na dzis
+Napisz test Browser Library, ktory: (1) otworzy strone z formularzem
+zawierajacym input[type=file] i wykona Upload File dla lokalnego pliku,
+(2) zarejestruje Promise To Wait For Response PRZED kliknieciem przycisku
+wysylajacego formularz i sprawdzi kod statusu odpowiedzi API, (3) utworzy
+dwa niezalezne konteksty (New Context) symulujace dwoch roznych uzytkownikow
+zalogowanych jednoczesnie w jednym uruchomieniu testu.
+
+================================================================================
