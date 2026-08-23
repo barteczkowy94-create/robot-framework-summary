@@ -2283,3 +2283,127 @@ dwa niezalezne konteksty (New Context) symulujace dwoch roznych uzytkownikow
 zalogowanych jednoczesnie w jednym uruchomieniu testu.
 
 ================================================================================
+# Dzien 25 (2026-08-23, niedziela) - RequestsLibrary runda 2 (autoryzacja, wspolne naglowki, PUT/PATCH/DELETE, ponawianie zadan)
+
+## 1. Temat dnia
+Druga runda RequestsLibrary - tym razem tematy pomijane przy pierwszym podejsciu:
+przekazywanie wspolnych naglowkow (w tym tokenu Bearer) do sesji, aktualizacja i
+usuwanie zasobow (PUT/PATCH/DELETE On Session), parametry zapytania (params) oraz
+odporne na chwilowa niedostepnosc API ponawianie zadan przez Wait Until Keyword
+Succeeds w polaczeniu z TRY/EXCEPT.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Naglowki wspolne dla calej sesji (np. token Bearer, Content-Type) podawaj
+  raz w `Create Session` przez parametr `headers` - unikniesz powielania tego
+  samego slownika naglowkow w kazdym wywolaniu GET/POST/PUT/DELETE On Session.
+- Do czesciowej aktualizacji zasobu uzywaj `PATCH On Session` (tylko wybrane
+  pola), a do pelnej podmiany calego zasobu `PUT On Session` (wszystkie pola) -
+  mieszanie tych dwoch podejsc bez zastanowienia prowadzi do przypadkowego
+  nadpisania pol, ktorych test nie chcial zmieniac.
+- Parametry zapytania (query string) przekazuj przez argument `params`
+  (slownik), a nie recznie sklejany string w URL - RF/requests poprawnie
+  zakoduje wtedy znaki specjalne.
+- Do zadan, ktore moga chwilowo zawiesc (np. API jeszcze "rozgrzewa sie" po
+  restarcie), stosuj `Wait Until Keyword Succeeds` z rozsadna liczba prob i
+  odstepem czasu zamiast recznej petli FOR ze Sleep.
+- Blad polaczenia (np. `ConnectionError`) lap przez `TRY`/`EXCEPT` i zglaszaj
+  czytelny komunikat diagnostyczny (`Fail`) zamiast pozwalac testowi
+  zakonczyc sie surowym tracebackiem Pythona.
+
+## 3. Przykladowy kod
+```robotframework
+*** Settings ***
+Library           RequestsLibrary
+Library           Collections
+
+*** Variables ***
+${BASE_URL}       https://jsonplaceholder.typicode.com
+${API_TOKEN}      %{API_TOKEN=demo-token-123}
+
+*** Test Cases ***
+Sesja ze wspolnymi naglowkami i tokenem
+    [Documentation]    Tworzy sesje z naglowkiem Authorization wspolnym dla wszystkich zadan.
+    [Tags]    api
+    &{naglowki}=    Create Dictionary
+    ...    Authorization=Bearer ${API_TOKEN}
+    ...    Content-Type=application/json
+    Create Session    api    ${BASE_URL}    headers=${naglowki}    timeout=10
+    ${response}=    GET On Session    api    /posts/1    expected_status=200
+    Should Be Equal    ${response.request.headers}[Authorization]    Bearer ${API_TOKEN}
+
+Czesciowa aktualizacja zasobu (PATCH) i pelna podmiana (PUT)
+    [Documentation]    Roznica miedzy PATCH (czesciowa zmiana) a PUT (pelna podmiana).
+    [Tags]    api
+    Create Session    api    ${BASE_URL}    timeout=10
+    &{poprawka}=    Create Dictionary    title=Zaktualizowany tytul
+    ${response_patch}=    PATCH On Session    api    /posts/1    json=${poprawka}    expected_status=200
+    Should Be Equal    ${response_patch.json()}[title]    Zaktualizowany tytul
+
+    &{pelny_obiekt}=    Create Dictionary    id=1    title=Nowy    body=Nowa tresc    userId=1
+    ${response_put}=    PUT On Session    api    /posts/1    json=${pelny_obiekt}    expected_status=200
+    Dictionary Should Contain Key    ${response_put.json()}    body
+
+Parametry zapytania i ponawianie niestabilnego zadania
+    [Documentation]    Query params przez "params" oraz retry przez Wait Until Keyword Succeeds.
+    [Tags]    api
+    Create Session    api    ${BASE_URL}    timeout=10
+    &{filtr}=    Create Dictionary    userId=1
+    ${response}=    GET On Session    api    /posts    params=${filtr}    expected_status=200
+    Should Not Be Empty    ${response.json()}
+
+    Wait Until Keyword Succeeds    3x    2s
+    ...    GET On Session    api    /posts/1    expected_status=200
+
+Usuniecie zasobu z obsluga bledu polaczenia
+    [Documentation]    DELETE On Session wraz z TRY/EXCEPT na wypadek problemu z siecia.
+    [Tags]    api
+    Create Session    api    ${BASE_URL}    timeout=10
+    TRY
+        ${response}=    DELETE On Session    api    /posts/1    expected_status=200
+    EXCEPT    AS    ${blad}
+        Fail    Usuniecie zasobu nie powiodlo sie: ${blad}
+    END
+    Should Be Equal As Integers    ${response.status_code}    200
+```
+
+## 4. Najczestsze bledy
+- Powtarzanie tego samego slownika naglowkow (np. tokenu) w kazdym wywolaniu
+  GET/POST/PUT/DELETE On Session zamiast przekazac go raz do Create Session -
+  wieksze ryzyko literowki i trudniejsza zmiana tokenu w calym suite.
+- Uzywanie PUT tam, gdzie potrzebna jest tylko czesciowa aktualizacja - API,
+  ktore nie dostanie wszystkich wymaganych pol w PUT, moze wyzerowac pozostale
+  wartosci zasobu.
+- Recznie sklejany URL z parametrami (`/posts?userId=1&_limit=5` jako string)
+  zamiast argumentu `params` - latwo o bledy kodowania znakow specjalnych
+  (spacje, znaki diakrytyczne) i trudniejsza czytelnosc testu.
+- Petla FOR ze Sleep imitujaca ponawianie zadania zamiast wbudowanego Wait
+  Until Keyword Succeeds - wiecej kodu do utrzymania i brak jasnego limitu
+  prob/czasu w jednym miejscu.
+- Brak obslugi wyjatku polaczenia (np. gdy API jest chwilowo niedostepne) -
+  test konczy sie surowym tracebackiem Pythona zamiast czytelnym komunikatem
+  ulatwiajacym diagnoze w raporcie.
+
+## 5. Ulepszenia z AI
+- Wklej dokumentacje API (np. fragment specyfikacji OpenAPI dotyczacy PATCH
+  vs PUT) i poproś Claude/Copilot o wygenerowanie osobnych testow dla obu
+  operacji z poprawnymi payloadami.
+- Poproś AI o przeglad istniejacych testow RequestsLibrary pod katem
+  duplikowania naglowkow autoryzacji i przeniesienie ich do wspolnego
+  Create Session (refaktoryzacja).
+- Uzyj AI do zaproponowania rozsadnych parametrow Wait Until Keyword Succeeds
+  (liczba prob, odstep czasu) na podstawie opisanego zachowania API (np. czas
+  "rozgrzewania" po restarcie).
+- Poproś AI o wygenerowanie bloku TRY/EXCEPT z czytelnym komunikatem bledu na
+  podstawie typowych wyjatkow biblioteki requests (ConnectionError, Timeout).
+- Wklej przykladowy URL z recznie sklejanymi parametrami i poproś AI o
+  przepisanie go na wywolanie z argumentem `params` jako slownik.
+
+## Zadanie na dzis
+Napisz suite RequestsLibrary, ktory: (1) utworzy sesje ze wspolnym naglowkiem
+Authorization przekazanym raz w Create Session, (2) wykona test PATCH
+aktualizujacy jedno pole zasobu i zweryfikuje odpowiedz, (3) wykona test GET
+z parametrami zapytania przekazanymi przez argument params, (4) opakuje jedno
+z zadan w Wait Until Keyword Succeeds oraz w blok TRY/EXCEPT z czytelnym
+komunikatem bledu na wypadek problemu z polaczeniem.
+
+================================================================================
