@@ -2407,3 +2407,137 @@ z zadan w Wait Until Keyword Succeeds oraz w blok TRY/EXCEPT z czytelnym
 komunikatem bledu na wypadek problemu z polaczeniem.
 
 ================================================================================
+
+
+# Dzień 26 (2026-08-24, poniedziałek) - Dane testowe i Data-Driven Testing runda 2 (Test Template na poziomie suite'u, argumenty słownikowe, biblioteka DataDriver, nazwy wierszy)
+
+## 1. Temat dnia
+Druga runda tematu Data-Driven Testing - tym razem zagadnienia pominięte przy
+pierwszym podejściu: globalny `Test Template` ustawiany raz dla całego suite'u
+(zamiast `[Template]` w każdym Test Case osobno), przekazywanie argumentów do
+szablonu jako słownik (`&{...}`) zamiast pozycyjnych wartości, zewnętrzna
+biblioteka `DataDriver` do wczytywania danych bezpośrednio z pliku CSV/XLSX bez
+ręcznego pisania tabeli w `*** Test Cases ***`, a także sterowanie nazwami
+wierszy i kontynuacją wykonania mimo błędu w pojedynczym przypadku.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- `Test Template` w sekcji `*** Settings ***` ustawia domyślny szablon dla
+  wszystkich Test Case'ów w danym pliku - poszczególne testy mogą go nadpisać
+  własnym `[Template]`, ale gdy cały suite testuje jedną regułę biznesową,
+  ustawienie go globalnie skraca kod i eliminuje powtórzenia.
+- Argumenty do keywordu szablonowego można przekazywać jako słownik
+  (`&{dane}=    Create Dictionary    ...` + rozpakowanie `&{dane}` w wierszu
+  Test Case) - ułatwia to czytanie danych wprost z pliku JSON/YAML bez
+  ręcznego rozbijania na pozycyjne kolumny.
+- Do dużych zestawów danych (dziesiątki/setki wierszy) zamiast ręcznie pisanej
+  tabeli warto użyć biblioteki `DataDriver` - wczytuje ona dane z pliku CSV
+  lub XLSX i automatycznie generuje osobny Test Case dla każdego wiersza,
+  z nazwą testu pobraną z kolumny `*** Test Cases ***`/`Name`.
+- Nazwę każdego wygenerowanego przypadku (czy to w ręcznej tabeli, czy przez
+  DataDriver) projektuj tak, by od razu było wiadomo, jaki scenariusz biznesowy
+  reprezentuje - ułatwia to filtrowanie po nazwie (`--test "*puste haslo*"`)
+  bez otwierania kodu testu.
+- Domyślnie każdy wiersz w Template jest niezależnym testem - błąd w jednym
+  nie przerywa pozostałych, więc przy analizie wyniku suite'u sprawdzaj
+  wszystkie przypadki w report.html, a nie tylko pierwszy napotkany błąd.
+
+## 3. Przykładowy kod
+Globalny `Test Template` + argumenty jako słownik:
+```robotframework
+*** Settings ***
+Documentation     DDT z globalnym Test Template i argumentami slownikowymi.
+Library           Collections
+Test Template     Sprawdz walidacje rejestracji
+
+*** Test Cases ***                    DANE
+Poprawna rejestracja                  ${DANE_1}
+Rejestracja z pustym emailem          ${DANE_2}
+Rejestracja ze zbyt krotkim haslem    ${DANE_3}
+
+*** Variables ***
+&{DANE_1}         email=jan@firma.pl    haslo=BardzoTajneHaslo1    oczekiwany=SUKCES
+&{DANE_2}         email=${EMPTY}        haslo=BardzoTajneHaslo1    oczekiwany=BLAD
+&{DANE_3}         email=jan@firma.pl    haslo=abc                  oczekiwany=BLAD
+
+*** Keywords ***
+Sprawdz walidacje rejestracji
+    [Arguments]    &{dane}
+    ${wynik}=    Zarejestruj    email=${dane}[email]    haslo=${dane}[haslo]
+    Should Be Equal    ${wynik}    ${dane}[oczekiwany]
+
+Zarejestruj
+    [Arguments]    ${email}    ${haslo}
+    IF    "${email}" == "${EMPTY}" or len($haslo) < 8
+        RETURN    BLAD
+    END
+    RETURN    SUKCES
+```
+
+Wczytywanie danych z pliku CSV przez bibliotekę DataDriver (wymaga
+`pip install robotframework-datadriver`):
+```robotframework
+*** Settings ***
+Library           DataDriver    file=dane_rejestracji.csv    encoding=UTF-8
+Test Template     Sprawdz walidacje rejestracji
+
+*** Test Cases ***
+Szablon rejestracji    DEFAULT
+
+*** Keywords ***
+Sprawdz walidacje rejestracji
+    [Arguments]    ${email}    ${haslo}    ${oczekiwany}
+    ${wynik}=    Zarejestruj    ${email}    ${haslo}
+    Should Be Equal    ${wynik}    ${oczekiwany}
+```
+Przykładowy `dane_rejestracji.csv`:
+```
+*** Test Cases ***,email,haslo,oczekiwany
+Poprawna rejestracja,jan@firma.pl,BardzoTajneHaslo1,SUKCES
+Pusty email,,BardzoTajneHaslo1,BLAD
+Za krotkie haslo,jan@firma.pl,abc,BLAD
+```
+
+## 4. Najczęstsze błędy
+- Kopiowanie identycznego `[Template]` do każdego Test Case w pliku zamiast
+  jednorazowego ustawienia `Test Template` w `*** Settings ***`, gdy cały
+  suite testuje jedną regułę - niepotrzebne powielanie kodu.
+- Rozpakowywanie słownika argumentów bez wskazania kluczy w keywordzie
+  (`${dane}[klucz]`) - użycie samych pozycji zamiast nazwanych pól utrudnia
+  czytanie testu i psuje się przy zmianie kolejności pól w danych.
+- Instalacja `DataDriver` bez ustawienia poprawnego `encoding` dla plików CSV
+  zawierających polskie znaki - dane z ogonkami (ą, ę, ł) trafiają do testu
+  jako zniekształcone znaki, a błąd bywa mylnie diagnozowany jako problem z
+  logiką testu.
+- Nazwa pierwszego Test Case w pliku z DataDriver ("Szablon rejestracji") jest
+  traktowana jako placeholder, ale bywa mylona z realną nazwą przypadku - w
+  report.html i tak liczą się nazwy wygenerowane z kolumny danych.
+- Brak nagłówka zgodnego z nazwami argumentów keywordu w pliku CSV/XLSX -
+  DataDriver dopasowuje kolumny po nazwie, więc literówka w nagłówku pliku
+  danych powoduje brak przekazania wartości do testu (pusty argument) zamiast
+  czytelnego błędu w momencie uruchomienia.
+
+## 5. Ulepszenia z AI
+- Wklej przykładowy wiersz danych i opis reguły biznesowej, a poproś Claude/
+  Copilot o wygenerowanie kompletnego pliku CSV z kombinacjami przypadków
+  brzegowych gotowego do podpięcia pod DataDriver.
+- Poproś AI o przepisanie istniejącej ręcznej tabeli `[Template]` na wariant
+  z globalnym `Test Template` i argumentami słownikowymi (`&{...}`), gdy
+  liczba kolumn w tabeli zaczyna przeszkadzać w czytelności.
+- Użyj AI do wygenerowania nazw przypadków testowych (kolumna `Test Cases`/
+  `Name` w CSV) na podstawie samych wartości danych, tak by od razu opisywały
+  scenariusz biznesowy zamiast "Wiersz 1", "Wiersz 2".
+- Poproś AI o przegląd pliku danych pod kątem duplikatów i brakujących
+  kombinacji (macierz parametrów) przed podłączeniem go pod DataDriver.
+- Wklej log błędu z niezgodną liczbą/nazwą argumentów w wierszu Template i
+  poproś AI o wskazanie, w którym wierszu danych brakuje kolumny lub jest
+  literówka w nagłówku.
+
+## Zadanie na dziś
+Przekształć istniejący test z ręczną tabelą `[Template]` (np. z Dnia 8) tak,
+aby: (1) zamiast `[Template]` w Test Case użyć globalnego `Test Template` w
+sekcji `*** Settings ***`, (2) argumenty do keywordu szablonowego przekazać
+jako słownik `&{dane}` odczytywany po nazwanych kluczach, (3) dodać co
+najmniej jeden przypadek z pustą wartością pola i sprawdzić, że nazwa tego
+wiersza w report.html jasno opisuje testowany scenariusz.
+
+================================================================================
