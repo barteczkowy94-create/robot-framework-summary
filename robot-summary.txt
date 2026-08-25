@@ -2541,3 +2541,140 @@ najmniej jeden przypadek z pustą wartością pola i sprawdzić, że nazwa tego
 wiersza w report.html jasno opisuje testowany scenariusz.
 
 ================================================================================
+
+================================================================================
+# Dzień 27 (2026-08-25, wtorek) - Tagowanie i selektywne uruchamianie testów runda 2 (Set Tags/Remove Tags, Keyword Tags, wzorce z NOT, rebot)
+
+## 1. Temat dnia
+Druga runda tematu tagowania - tym razem mechanizmy pomijane przy pierwszym
+podejściu: dynamiczne nadawanie i usuwanie tagów w trakcie wykonania testu
+(`Set Tags` / `Remove Tags`), tagowanie na poziomie całego pliku Keywords
+(`Keyword Tags`), bardziej złożone wzorce filtrowania z operatorem `NOT` i
+maskami (`*`), różnica między `--skip` a `--exclude`, oraz narzędzie `rebot`
+pozwalające przefiltrować i przetworzyć wyniki z już istniejącego `output.xml`
+bez ponownego uruchamiania testów.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- `Set Tags` i `Remove Tags` (BuiltIn) pozwalają nadać lub usunąć tag
+  bieżącego testu w trakcie jego wykonania - przydatne np. do oznaczania
+  testu jako "flaky" po nieudanej pierwszej próbie i udanym powtórzeniu, albo
+  do oznaczenia "slow" na podstawie realnego czasu wykonania.
+- `Keyword Tags` w sekcji `*** Settings ***` pliku resource nadaje domyślny
+  tag wszystkim keywordom zdefiniowanym w tym pliku (widoczny w log.html przy
+  wywołaniach) - ułatwia odróżnienie, z którego resource'a pochodzi dany krok,
+  bez ręcznego dopisywania `[Tags]` przy każdym keywordzie.
+- Wzorce filtrowania obsługują `NOT` (`smokeANDNOTslow` - testy z tagiem
+  smoke, ale bez slow) oraz maski `*`/`?` (`--include regression*`) - warto
+  je znać zamiast wielokrotnego łączenia osobnych `--exclude`.
+- `--skip` różni się od `--exclude`: pominięty tak testem `--skip` nadal
+  pojawia się w report.html/log.html ze statusem SKIP i wpływa na statystyki,
+  a wykluczony przez `--exclude` w ogóle nie jest uruchamiany ani raportowany.
+- `rebot` pozwala wygenerować nowy log.html/report.html (np. z innym zestawem
+  `--include`/`--exclude`, scaleniem kilku przebiegów) z istniejącego
+  `output.xml` - nie trzeba ponownie odpalać testów, żeby zobaczyć inny
+  przekrój tych samych wyników.
+
+## 3. Przykładowy kod
+Dynamiczne tagowanie na podstawie wyniku wykonania:
+```robotframework
+*** Settings ***
+Documentation     Dynamiczne tagowanie testu jako "flaky" po powtorce.
+Library           Collections
+
+*** Test Cases ***
+Logowanie przez API z ponowna proba
+    [Tags]    api    login
+    ${status}=    Sprobuj zalogowac z powtorka
+
+Sprobuj zalogowac z powtorka
+    [Documentation]    Pomocnicza sekwencja - w realnym tescie to bylby
+    ...                osobny keyword wywolywany z Test Case.
+    Log    Symulacja pierwszej nieudanej proby logowania
+    Run Keyword And Ignore Error    Fail    Chwilowy blad sieci
+    Set Tags    flaky
+    Log    Symulacja udanej drugiej proby logowania
+```
+
+Tag domyślny dla wszystkich keywordów w pliku resource:
+```robotframework
+*** Settings ***
+Documentation    Keywordy do logowania - wszystkie oznaczone tagiem "auth".
+Keyword Tags     auth
+
+*** Keywords ***
+Zaloguj poprawnym uzytkownikiem
+    Log    Symulacja logowania
+
+Wyloguj biezacego uzytkownika
+    Log    Symulacja wylogowania
+```
+
+Filtrowanie z operatorem NOT i maską oraz różnica `--skip` vs `--exclude`:
+```bash
+# smoke, ale bez testow oznaczonych jako wolne
+robot --include smokeANDNOTslow tests/
+
+# wszystkie tagi zaczynajace sie od "regression"
+robot --include regression* tests/
+
+# testy sie uruchamiaja, ale te z tagiem "wip" pokazuja sie jako SKIP
+robot --skip wip tests/
+```
+
+Ponowne przetworzenie wyniku bez ponownego uruchamiania testów (`rebot`):
+```bash
+# najpierw pelny przebieg, zapisuje output.xml
+robot --outputdir results tests/
+
+# potem osobny raport tylko dla podzbioru tagow, z tego samego output.xml
+rebot --include smoke --outputdir results/smoke-only results/output.xml
+```
+
+## 4. Najczęstsze błędy
+- Wywołanie `Set Tags` wewnątrz `[Teardown]` z oczekiwaniem, że tag pojawi
+  się "przed" testem w raporcie na żywo - tag faktycznie trafia do wyniku
+  testu, ale kolejność w kodzie i tak musi być logiczna, bo tag ustawiony w
+  teardownie nie wpływa już na warunki `--include`/`--exclude` przy tym samym
+  uruchomieniu (te są rozstrzygane przed startem testu).
+- Mylenie `--skip` z `--exclude` - `--skip` nadal generuje wpis testu w
+  statystykach (jako SKIP), więc "ukrycie" testu w ten sposób nie zmniejsza
+  liczby testów widocznych w report.html tak, jak zrobiłby to `--exclude`.
+- Zapominanie, że `rebot` operuje wyłącznie na tym, co już jest w
+  `output.xml` - test wykluczony przez `--exclude` przy oryginalnym
+  uruchomieniu `robot` nie da się "odzyskać" żadnym filtrem w `rebot`, bo
+  nigdy nie został wykonany ani zapisany.
+- Ustawienie `Keyword Tags` w resource file zawierającym keywordy o różnym
+  przeznaczeniu (np. i logowanie, i operacje na bazie danych) - wszystkie
+  dostają ten sam tag, co zaciemnia log.html zamiast go porządkować.
+- Nieprawidłowa składnia wzorca z NOT (spacje albo małe/wielkie litery
+  niezgodne z resztą projektu) - `smoke AND NOT slow` z odstępami nie
+  zadziała tak samo jak `smokeANDNOTslow` bez spacji w wierszu poleceń.
+
+## 5. Ulepszenia z AI
+- Wklej listę tagów używanych w projekcie i poproś Claude/Copilot o
+  zaproponowanie reguł dynamicznego tagowania (`Set Tags`) na podstawie
+  typowych warunków w kodzie testów (np. "otaguj jako flaky, gdy pierwsza
+  próba się nie powiodła, a druga tak").
+- Poproś AI o wygenerowanie polecenia `rebot` z konkretną kombinacją
+  `--include`/`--exclude`/`--merge` na podstawie opisu "chcę osobny raport
+  tylko dla testów API oznaczonych jako critical, bez testów wolnych".
+- Wklej plik resource i zapytaj AI, czy `Keyword Tags` na poziomie pliku ma
+  sens, czy lepiej rozbić plik na mniejsze resource'y o spójnym zakresie
+  odpowiedzialności keywordów.
+- Użyj AI do przeglądu wyrażeń filtrujących z operatorami AND/OR/NOT pod
+  kątem literówek i niejednoznaczności przed wklejeniem ich do pipeline'u
+  CI/CD.
+- Wklej fragment log.html/output.xml z testami oznaczonymi `Set Tags flaky`
+  i poproś AI o podsumowanie, które obszary aplikacji generują najwięcej
+  niestabilnych testów.
+
+## Zadanie na dziś
+Rozbuduj dowolny istniejący test (np. z Dnia 9) tak, aby: (1) w keywordzie
+pomocniczym wywołał `Set Tags` z tagiem `flaky` w scenariuszu symulującym
+nieudaną pierwszą próbę i udaną drugą, (2) uruchom cały suite z `--outputdir`
+wskazującym osobny katalog na wynik, (3) bez ponownego uruchamiania testów
+użyj `rebot --include flaky` na zapisanym `output.xml`, aby wygenerować
+osobny raport tylko dla testów, które faktycznie dostały ten tag w trakcie
+wykonania.
+
+================================================================================
