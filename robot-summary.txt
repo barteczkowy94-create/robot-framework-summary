@@ -2678,3 +2678,127 @@ osobny raport tylko dla testów, które faktycznie dostały ten tag w trakcie
 wykonania.
 
 ================================================================================
+# Dzień 28 (2026-08-26, środa) - Resource files i modularizacja testów runda 2 (zagnieżdżone importy, __init__.robot, konflikty nazw, libdoc)
+
+## 1. Temat dnia
+Druga runda tematu Resource files - tym razem sprawy pomijane przy pierwszym
+podejściu: zagnieżdżone importy (resource importujący inny resource), plik
+`__init__.robot` do ustawień na poziomie całego katalogu testów, rozwiązywanie
+konfliktów nazw keywordów pochodzących z różnych resource'ów (`Library Search
+Order` / prefiksowanie źródłem), oddzielanie zmiennych do własnego pliku oraz
+generowanie dokumentacji modułów poleceniem `libdoc`.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Resource może importować inny resource - buduj hierarchię od ogółu do
+  szczegółu (np. `common.resource` z podstawowymi keywordami, a
+  `checkout.resource` importuje `common.resource` i dokłada logikę specyficzną
+  dla koszyka), ale pamiętaj, że RF wykryje i zgłosi błąd przy cyklu importów.
+- Plik `__init__.robot` umieszczony w katalogu z testami definiuje
+  `Suite Setup`/`Suite Teardown`/`Force Tags`/importy wspólne dla WSZYSTKICH
+  plików `.robot` w tym katalogu i podkatalogach - przydatne np. do jednego
+  logowania przed całym folderem testów regresji zamiast powtarzania go w
+  każdym pliku.
+- Gdy dwa zaimportowane resource'y mają keyword o tej samej nazwie, RF zgłasza
+  błąd niejednoznaczności przy jego użyciu - rozwiąż to przez `Library Search
+  Order` w BuiltIn albo (lepiej) przez zmianę nazwy jednego z keywordów, żeby
+  uniknąć kolizji na starcie.
+- Zmienne wspólne dla wielu resource'ów trzymaj w osobnym pliku `.resource`
+  z samą sekcją `*** Variables ***` (albo w pliku `.py`/`.yaml` importowanym
+  przez `Variables`), a nie rozrzucone po kilku plikach z keywordami - jedno
+  źródło prawdy ułatwia zmianę środowiska (np. adresu URL) w jednym miejscu.
+- Dokumentuj resource'y tak, by dało się wygenerować z nich czytelną
+  dokumentację poleceniem `libdoc` - każdy zespół korzystający z modułu
+  powinien móc sprawdzić dostępne keywordy bez czytania kodu źródłowego.
+
+## 3. Przykład kodu (.robot)
+Plik `resources/common.resource` (baza, importowana przez inne resource'y):
+```robotframework
+*** Settings ***
+Documentation     Wspolne keywordy bazowe - logowanie i nawigacja.
+Library           SeleniumLibrary
+
+*** Variables ***
+${BASE_URL}       https://example-shop.test
+
+*** Keywords ***
+Otworz Strone Glowna
+    Open Browser    ${BASE_URL}    headlesschrome
+    Maximize Browser Window
+```
+
+Plik `resources/checkout.resource` (importuje `common.resource` i dokłada
+własną logikę - hierarchia od ogółu do szczegółu):
+```robotframework
+*** Settings ***
+Documentation     Keywordy koszyka i platnosci - buduja na common.resource.
+Resource          ${CURDIR}/common.resource
+
+*** Keywords ***
+Dodaj Produkt Do Koszyka
+    [Arguments]    ${nazwa_produktu}
+    Otworz Strone Glowna
+    Log    Dodawanie produktu do koszyka: ${nazwa_produktu}
+
+Przejdz Do Podsumowania Zamowienia
+    Log    Przejscie do podsumowania zamowienia
+```
+
+Plik `tests/__init__.robot` (ustawienia wspólne dla całego katalogu `tests/`):
+```robotframework
+*** Settings ***
+Documentation     Wspolny Suite Setup/Teardown dla wszystkich testow w katalogu.
+Resource          ${CURDIR}/../resources/common.resource
+Suite Setup       Log    Start calego pakietu testow zakupowych
+Suite Teardown    Log    Koniec calego pakietu testow zakupowych
+Force Tags        checkout_suite
+```
+
+Sprawdzenie i wygenerowanie dokumentacji resource'a poleceniem `libdoc`:
+```bash
+# generuje czytelny plik HTML z lista keywordow, argumentow i dokumentacji
+python -m robot.libdoc resources/checkout.resource docs/checkout_keywords.html
+```
+
+## 4. Najczęstsze błędy
+- Import cykliczny między resource'ami (A importuje B, a B z powrotem A) -
+  Robot Framework zgłasza błąd parsowania przy starcie i żaden test w ogóle
+  się nie uruchomi, więc łatwo pomylić to z błędem w samym teście.
+- Nazwanie pliku z ustawieniami wspólnymi inaczej niż `__init__.robot` (np.
+  `setup.robot`) w katalogu testów - RF wtedy w ogóle go nie rozpozna jako
+  plik inicjujący pakiet i `Suite Setup` z niego nigdy się nie wykona.
+- Dwa resource'y z keywordem o identycznej nazwie zaimportowane w jednym
+  pliku testowym bez ustawienia `Library Search Order` ani zmiany nazwy -
+  test kończy się błędem niejednoznaczności dopiero przy próbie użycia tego
+  keywordu, co bywa mylące, jeśli import wygląda poprawnie.
+- Trzymanie zmiennych środowiskowych (URL, dane logowania) rozrzuconych po
+  wielu plikach `.resource` zamiast w jednym miejscu - zmiana środowiska
+  testowego wymaga wtedy edycji kilku plików zamiast jednego.
+- Brak `Documentation` przy poszczególnych keywordach w resource'ach, przez
+  co wygenerowany `libdoc` jest pusty/nieczytelny mimo poprawnej struktury
+  plików.
+
+## 5. Ulepszenia z AI
+- Wklej strukturę katalogów projektu i poproś Claude/Copilot o zaproponowanie
+  właściwej hierarchii importów resource'ów (co powinno importować co), tak
+  aby uniknąć ryzyka cykli już na etapie projektowania.
+- Poproś AI o wygenerowanie szkieletu pliku `__init__.robot` na podstawie
+  opisu, jakie kroki mają się wykonać raz przed/po całym katalogu testów
+  (np. logowanie do systemu, czyszczenie danych testowych).
+- Wklej listę keywordów z kilku resource'ów i poproś AI o wykrycie kolizji
+  nazw oraz propozycję bardziej jednoznacznego nazewnictwa.
+- Użyj AI do wygenerowania dokumentacji Markdown/HTML na podstawie kodu
+  resource'a, gdy brakuje czasu na ręczne uzupełnianie `Documentation` przy
+  każdym keywordzie (a następnie zweryfikuj i popraw wygenerowany opis).
+- Poproś AI o audyt pliku zmiennych pod kątem wartości, które powinny być
+  parametryzowane per środowisko (dev/staging/prod), zamiast być zaszyte na
+  sztywno w resource'ach.
+
+## Zadanie na dziś
+Rozbuduj strukturę z Dnia 10 (lub własny projekt) o: (1) drugi plik resource,
+który importuje pierwszy (np. `checkout.resource` importujący
+`common.resource`), (2) plik `tests/__init__.robot` z jednym wspólnym
+`Suite Setup`/`Suite Teardown` dla całego katalogu, (3) wygeneruj dokumentację
+jednego z resource'ów poleceniem `python -m robot.libdoc` i sprawdź w
+przeglądarce, czy wszystkie keywordy mają czytelny opis.
+
+================================================================================
