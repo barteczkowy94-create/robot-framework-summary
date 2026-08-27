@@ -2802,3 +2802,126 @@ jednego z resource'ów poleceniem `python -m robot.libdoc` i sprawdź w
 przeglądarce, czy wszystkie keywordy mają czytelny opis.
 
 ================================================================================
+# Dzień 29 (2026-08-27, czwartek) - Custom Keywords i własne biblioteki w Pythonie runda 2 (type hints, embedded arguments z regex, tagi keywordów, logger, integracja z BuiltIn)
+
+## 1. Temat dnia
+Druga runda tematu Custom Keywords - tym razem techniki pomijane przy
+pierwszym podejściu: automatyczna konwersja argumentów przez type hints,
+embedded arguments z własnym wzorcem regex w Pythonie, nadawanie tagów
+keywordom bezpośrednio w kodzie, poprawne logowanie przez `robot.api.logger`
+zamiast `print()` oraz wywoływanie innych keywordów RF z poziomu metody
+Pythona przez `BuiltIn().run_keyword()`.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Dodawaj type hints do sygnatury metody (np. `def dodaj(self, a: int, b:
+  int) -> int`) - Robot Framework automatycznie konwertuje przekazane
+  argumenty tekstowe na właściwy typ przed wywołaniem, więc nie trzeba
+  ręcznie wołać `int()`/`float()` wewnątrz keyworda.
+- Embedded arguments w Pythonie definiuje się tym samym `@keyword(...)`, ale
+  można ograniczyć dopasowanie własnym regexem, np. `@keyword("Ustaw status
+  zamowienia ${numer:\\d+} na ${status}")`, żeby uniknąć przypadkowego
+  dopasowania do innego keyworda o podobnej nazwie.
+- Tagi można nadać keywordowi już w kodzie przez `@keyword(tags=["api",
+  "smoke"])` - każdy test korzystający z tego keyworda automatycznie
+  dziedziczy te tagi, bez potrzeby powtarzania ich w `[Tags]` w każdym
+  teście.
+- Do logowania z poziomu biblioteki Pythona używaj `robot.api.logger`
+  (`logger.info`, `logger.warn`, `logger.debug`), nigdy `print()` -
+  `print()` trafia do konsoli, a nie do `log.html`, więc informacja ginie
+  przy standardowym przebiegu CI.
+- Gdy metoda Pythona musi wykonać inny keyword RF (np. z SeleniumLibrary
+  albo z resource'u), użyj `BuiltIn().run_keyword("Nazwa Keyworda", arg1,
+  arg2)` zamiast duplikować logikę - to jedyny poprawny sposób łączenia
+  kodu Pythonowego z warstwą keywordów RF.
+
+## 3. Przykład kodu
+Biblioteka Pythona `libraries/OrderLibrary.py` z type hints, embedded
+argumentem regex, tagami i logerem:
+```python
+from robot.api import logger
+from robot.api.deco import keyword, library
+from robot.libraries.BuiltIn import BuiltIn
+
+
+@library(scope="TEST")
+class OrderLibrary:
+    """Biblioteka RF pokazujaca zaawansowane techniki custom keywordow."""
+
+    def __init__(self):
+        self._zamowienia = {}
+
+    @keyword("Utworz Zamowienie O Wartosci ${wartosc:\\d+}", tags=["order", "api"])
+    def utworz_zamowienie(self, wartosc: int):
+        numer = len(self._zamowienia) + 1
+        self._zamowienia[numer] = wartosc
+        logger.info(f"Utworzono zamowienie nr {numer} o wartosci {wartosc}")
+        return numer
+
+    @keyword("Suma Zamowien Powinna Byc Rowna", tags=["order", "assertion"])
+    def suma_zamowien_powinna_byc_rowna(self, oczekiwana: int):
+        suma = sum(self._zamowienia.values())
+        if suma != oczekiwana:
+            raise AssertionError(f"Oczekiwano sumy {oczekiwana}, otrzymano {suma}")
+
+    @keyword("Zaloguj I Utworz Zamowienie")
+    def zaloguj_i_utworz_zamowienie(self, login: str, wartosc: int):
+        BuiltIn().run_keyword("Log", f"Logowanie jako {login}")
+        return self.utworz_zamowienie(wartosc)
+```
+
+Użycie w pliku testowym `tests/orders.robot`:
+```robotframework
+*** Settings ***
+Documentation     Test biblioteki OrderLibrary - runda 2 custom keywords.
+Library           ${CURDIR}/../libraries/OrderLibrary.py
+
+*** Test Cases ***
+Utworzenie dwoch zamowien i weryfikacja sumy
+    [Tags]    order-flow
+    Utworz Zamowienie O Wartosci 100
+    Utworz Zamowienie O Wartosci 250
+    Suma Zamowien Powinna Byc Rowna    350
+```
+
+## 4. Najczęstsze błędy
+- Brak type hints przy argumentach numerycznych - RF przekazuje wszystko
+  jako string, więc `a + b` konkatenuje teksty zamiast dodawać liczby, a
+  błąd ujawnia się dopiero w asercji, nie przy wywołaniu keyworda.
+- Użycie `print()` zamiast `robot.api.logger` - wiadomość znika w CI, gdzie
+  nikt nie czyta konsoli, a `log.html` pozostaje bez żadnego śladu.
+- Zbyt ogólny wzorzec regex w embedded argumentach (np. `${cokolwiek}` bez
+  ograniczenia typu) - keyword zaczyna dopasowywać się do fragmentów
+  zdań, które miały trafić do zupełnie innego keyworda.
+- Tworzenie nowej instancji `BuiltIn()` w każdej linijce zamiast raz w
+  metodzie - działa, ale utrudnia czytelność; lepiej przypisać do lokalnej
+  zmiennej na początku metody, jeśli wywołań jest kilka.
+- Nadpisanie nazwy istniejącego, wbudowanego keyworda (np. własny "Log")
+  bez świadomości konfliktu - RF zgłasza niejednoznaczność albo po cichu
+  używa złej implementacji, zależnie od `Library Search Order`.
+
+## 5. Ulepszenia z AI
+- Wklej istniejącą metodę biblioteki bez type hints i poproś Claude/Copilot
+  o dodanie właściwych adnotacji typów na podstawie sposobu użycia
+  argumentów w ciele metody.
+- Poproś AI o zaproponowanie wzorca regex dla embedded argument, który nie
+  będzie kolidował z innymi keywordami w tej samej bibliotece (podaj mu
+  pełną listę istniejących nazw keywordów jako kontekst).
+- Użyj AI do audytu biblioteki pod kątem `print()` użytego zamiast
+  `robot.api.logger` - poproś o listę wszystkich wystąpień i gotową
+  poprawkę.
+- Poproś o wygenerowanie przykładu integracji z `BuiltIn().run_keyword()`
+  dla konkretnego scenariusza (np. "wywołaj keyword z SeleniumLibrary z
+  poziomu mojej metody Pythona").
+- Wykorzystaj AI do zaproponowania zestawu tagów (`tags=[...]`) dla
+  wszystkich keywordów w bibliotece na podstawie ich nazw i docstringów,
+  tak aby selektywne uruchamianie testów było spójne w całym projekcie.
+
+## Zadanie na dziś
+Weź bibliotekę Pythona z Dnia 11 (lub własną) i rozbuduj ją o: (1) type
+hints przy co najmniej jednym argumencie numerycznym, (2) jeden keyword z
+embedded argumentem ograniczonym regexem (np. `${liczba:\\d+}`), (3) tagi
+nadane bezpośrednio w `@keyword(tags=[...])`, (4) zamianę wszystkich
+`print()` na `robot.api.logger`. Uruchom test i sprawdź w `log.html`, czy
+komunikaty z logera są widoczne.
+
+================================================================================
