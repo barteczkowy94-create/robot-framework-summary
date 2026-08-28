@@ -329,3 +329,80 @@
   zwraca wartosc domyslna zamiast rzucac wyjatek
 - Sort List -> sortuje liste w miejscu (in-place) i zwraca None - nie
   przypisuj wyniku do nowej zmiennej
+
+================================================================================
+
+## Tydzień 6 - Quiz (piątek, 2026-08-28) - Dni 25-29
+
+1. Do czego służy `Wait Until Keyword Succeeds` w kontekście testów API?
+   a) Do wymuszenia sztywnego opóźnienia przed żądaniem  b) Do ponawiania
+      wywołania keyworda (np. GET On Session) aż do sukcesu lub limitu
+      prób/czasu, przydatne przy asynchronicznych endpointach  c) Tylko do
+      testów UI  d) Do automatycznego retry na poziomie samej biblioteki
+      RequestsLibrary bez potrzeby dodatkowego keyworda
+
+2. Jak ustawić Test Template na poziomie całego suite'u zamiast pojedynczego testu?
+   a) Nie da się, Template działa tylko per test  b) Przez `Test Template`
+      w sekcji *** Settings ***, wtedy każdy wiersz w *** Test Cases ***
+      staje się zestawem argumentów dla wskazanego keyworda  c) Przez
+      `[Template]` w każdym teście osobno  d) Przez plik konfiguracyjny YAML
+
+3. Czym różni się `Set Tags` od `[Tags]` w Robot Framework?
+   a) Niczym, to synonimy  b) `[Tags]` to statyczna deklaracja w definicji
+      testu, `Set Tags` to keyword dodający tagi dynamicznie w trakcie
+      wykonania testu  c) `Set Tags` działa tylko na poziomie suite'u
+   d) `[Tags]` można używać tylko raz na plik
+
+4. Co oznacza wzorzec z `NOT` przy selektywnym uruchamianiu testów, np.
+   `--include smokeNOTslow`?
+   a) Uruchamia testy z tagiem smoke, ale wyklucza te, które mają
+      jednocześnie tag slow  b) Uruchamia wszystkie testy poza tagiem smoke
+   c) Jest niepoprawną składnią  d) Uruchamia testy z tagiem "smokeNOTslow"
+      jako dosłowną nazwą
+
+5. Czego NIE może zawierać plik `__init__.robot`?
+   a) Sekcji *** Settings ***  b) Suite Setup/Teardown  c) Sekcji
+      *** Test Cases ***  d) Importów Resource/Library
+
+6. Do czego służy polecenie `python -m robot.libdoc`?
+   a) Uruchamia testy w trybie debug  b) Generuje dokumentację HTML/XML
+      keywordów z resource'u lub biblioteki  c) Formatuje kod .robot
+      (jak Robotidy)  d) Sprawdza jakość kodu (jak rflint)
+
+7. Jaką korzyść daje dodanie type hints do argumentów metody w
+   bibliotece Pythona dla RF (np. `def f(self, a: int)`)?
+   a) Żadną, RF ignoruje adnotacje typów  b) RF automatycznie konwertuje
+      przekazany argument tekstowy na wskazany typ przed wywołaniem  c)
+      Przyspiesza wykonanie testu  d) Wymusza walidację argumentu tylko
+      w trybie DEBUG
+
+8. Dlaczego do logowania z poziomu biblioteki Pythona należy używać
+   `robot.api.logger` zamiast `print()`?
+   a) `print()` jest wolniejszy  b) `print()` trafia do konsoli, a nie do
+      log.html, więc informacja ginie w standardowym przebiegu (np. w CI)
+   c) `print()` jest przestarzały w Pythonie  d) Nie ma żadnej różnicy
+
+**Odpowiedzi:** 1-b, 2-b, 3-b, 4-a, 5-c, 6-b, 7-b, 8-b
+
+## Tydzień 6 - Fiszki
+
+- Wait Until Keyword Succeeds -> ponawia wywołanie keyworda (np. z
+  RequestsLibrary) aż do sukcesu lub limitu prób/czasu, zamiast sztywnego Sleep
+- Test Template (poziom suite'u, *** Settings ***) -> każdy wiersz w
+  *** Test Cases *** to zestaw argumentów dla jednego wspólnego keyworda
+- DataDriver -> biblioteka RF do wczytywania danych testowych z
+  zewnętrznego pliku (CSV/XLSX) i generowania z niego osobnych testów
+- Set Tags / Remove Tags -> dynamiczne dodawanie/usuwanie tagów w trakcie
+  wykonania testu, w odróżnieniu od statycznego [Tags] w definicji
+- Keyword Tags (@keyword(tags=[...])) -> tagi nadane keywordowi w kodzie
+  Pythona, dziedziczone automatycznie przez testy, które go używają
+- Wzorzec NOT w --include/--exclude -> np. "smokeNOTslow" uruchamia testy z
+  tagiem smoke, wykluczając te, które mają też tag slow
+- __init__.robot -> definiuje Suite Setup/Teardown dla całego katalogu,
+  nie może zawierać własnej sekcji *** Test Cases ***
+- python -m robot.libdoc -> generuje dokumentację HTML/XML keywordów z
+  resource'u lub biblioteki na podstawie [Documentation] i docstringów
+- Type hints w argumentach metody Pythona -> RF automatycznie konwertuje
+  przekazany string na wskazany typ (int, float, bool) przed wywołaniem
+- robot.api.logger zamiast print() -> jedyny poprawny sposób logowania z
+  poziomu biblioteki Pythona, żeby wpis trafił do log.html

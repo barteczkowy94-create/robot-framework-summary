@@ -2925,3 +2925,126 @@ nadane bezpośrednio w `@keyword(tags=[...])`, (4) zamianę wszystkich
 komunikaty z logera są widoczne.
 
 ================================================================================
+# Dzień 30 (2026-08-28, piątek) - Raportowanie i logi runda 2 (Log html=True, zrzuty ekranu w logu, redukcja rozmiaru logów, xunit.xml, Listener API)
+
+## 1. Temat dnia
+Druga runda tematu raportowania - techniki pomijane przy pierwszym podejściu:
+osadzanie własnego HTML-a (w tym obrazków) bezpośrednio w log.html przez
+`Log ... html=True`, dynamiczna zmiana poziomu logowania w trakcie testu
+(`Set Log Level`), zmniejszanie rozmiaru dużych logów przez
+`--removekeywords`/`--flattenkeywords`, generowanie `xunit.xml` do integracji
+z Jenkins/GitHub Actions oraz podstawy Listener API do programowego
+przechwytywania wyników.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- `Log    <b>tekst</b>    html=True` pozwala osadzić własny HTML (tabele,
+  linki, pogrubienia) bezpośrednio w log.html - przydatne np. do wklejenia
+  fragmentu odpowiedzi API w czytelnej tabeli zamiast surowego JSON-a.
+- Zrzut ekranu zapisany na dysk (np. przez SeleniumLibrary/Browser) można
+  osadzić w logu jako obrazek przez `Log    <img src="${plik}">    html=True`
+  - dzięki temu screenshot jest widoczny bez opuszczania log.html.
+- W dużych suite'ach (setki keywordów) używaj `--removekeywords PASS` albo
+  `--flattenkeywords FOR`, żeby usunąć/spłaszczyć zbędne szczegóły w logu i
+  znacząco zmniejszyć rozmiar pliku, nie tracąc informacji o testach FAIL.
+- Generuj `--xunit output.xml` przy uruchamianiu `robot`, aby wtyczki CI
+  (Jenkins JUnit, GitHub Actions test-reporter) mogły pokazać wyniki testów
+  natywnie w interfejsie builda, a nie tylko jako link do artefaktu.
+- Listener API (`--listener MyListener.py`) pozwala podpiąć własny kod pod
+  zdarzenia RF (start/end testu, keyworda, wiadomość logu) - stosuj go do
+  wysyłania powiadomień w czasie rzeczywistym (np. na Slacka) albo do
+  zapisu własnych metryk, zamiast parsować output.xml po fakcie.
+
+## 3. Przykład kodu
+```robotframework
+*** Settings ***
+Documentation     Zaawansowane raportowanie - HTML w logu i dynamiczny loglevel.
+Library           OperatingSystem
+
+*** Test Cases ***
+Osadzenie tabeli HTML w log.html
+    [Documentation]    Pokazuje wynik "API" w czytelnej tabeli zamiast JSON-a.
+    [Tags]    reporting
+    ${tabela}=    Catenate
+    ...    <table border="1"><tr><th>Pole</th><th>Wartosc</th></tr>
+    ...    <tr><td>status</td><td>200</td></tr>
+    ...    <tr><td>uzytkownik</td><td>jan.kowalski</td></tr></table>
+    Log    ${tabela}    html=True
+
+Dynamiczna zmiana poziomu logowania w trakcie testu
+    [Documentation]    Wlacza DEBUG tylko na czas krytycznego fragmentu.
+    [Tags]    reporting
+    Log    Ten wpis widoczny przy standardowym INFO
+    ${poprzedni}=    Set Log Level    DEBUG
+    Log    Ten wpis widoczny tylko przy --loglevel DEBUG lub nizej    level=DEBUG
+    Set Log Level    ${poprzedni}
+    Log    Powrot do poprzedniego poziomu logowania
+```
+
+Minimalny Listener API do logowania każdego FAIL-a do osobnego pliku
+(`listeners/FailListener.py`):
+```python
+class FailListener:
+    ROBOT_LISTENER_API_VERSION = 3
+
+    def __init__(self):
+        self.plik = open("fail_report.txt", "a")
+
+    def end_test(self, data, result):
+        if not result.passed:
+            self.plik.write(f"FAIL: {data.name} - {result.message}\n")
+
+    def close(self):
+        self.plik.close()
+```
+
+Przydatne polecenia CLI:
+```
+robot --xunit xunit.xml --outputdir results tests/
+robot --removekeywords PASS --flattenkeywords FOR --outputdir results tests/
+robot --listener listeners/FailListener.py tests/
+rebot --removekeywords WUKS --output raport_skrocony.xml results/output.xml
+```
+
+## 4. Najczęstsze błędy
+- Osadzanie dużych/wielu obrazków przez `html=True` w każdym kroku testu -
+  log.html potrafi urosnąć do setek MB i przestaje się otwierać w
+  przeglądarce; embeduj zrzuty tylko przy FAIL albo w kluczowych punktach.
+- Wpisywanie niezaufanego/niezescapowanego tekstu (np. odpowiedzi z API) z
+  `html=True` - jeśli treść zawiera znaki `<`/`>`, mogą zepsuć strukturę
+  logu albo (przy danych z zewnątrz) wprowadzić przypadkowy HTML injection
+  we własnym raporcie.
+- Zostawienie `Set Log Level    DEBUG` bez przywrócenia poprzedniego
+  poziomu - reszta testu (i kolejne testy w tym samym wątku) logują dużo
+  więcej niż powinny, zaśmiecając log.html.
+- Brak `--xunit` w pipeline CI, mimo że wtyczka do raportowania testów tego
+  wymaga - build pokazuje tylko "success/failure", bez rozbicia na
+  poszczególne testy w interfejsie Jenkinsa/GitHub Actions.
+- Pisanie własnego Listenera, który rzuca wyjątek w metodzie `end_test`/
+  `end_keyword` - błąd w listenerze potrafi przerwać cały przebieg testów,
+  dlatego kod listenera powinien mieć własną obsługę wyjątków.
+
+## 5. Ulepszenia z AI
+- Wklej fragment surowej odpowiedzi JSON z API i poproś Claude/ChatGPT o
+  wygenerowanie gotowego kodu `Catenate` budującego czytelną tabelę HTML do
+  `Log ... html=True`.
+- Poproś AI o wygenerowanie szkieletu prostego Listenera Pythonowego pod
+  konkretny cel (np. wysyłka powiadomienia na Slacka przy FAIL, zapis
+  metryk czasu trwania testów do CSV).
+- Użyj AI do zaproponowania, w których miejscach dużego suite'u warto użyć
+  `--removekeywords`/`--flattenkeywords`, na podstawie opisu, które
+  fragmenty logu są najmniej istotne (np. pętle FOR z wieloma iteracjami).
+- Wklej fragment `xunit.xml` lub konfigurację joba CI i poproś AI o
+  weryfikację, czy wtyczka raportująca (JUnit plugin, test-reporter) jest
+  poprawnie podpięta pod wygenerowany plik.
+- Poproś AI o przegląd własnego kodu Listenera pod kątem brakującej obsługi
+  wyjątków, która mogłaby przerwać cały przebieg testów w razie błędu.
+
+## Zadanie na dziś
+Weź dowolny istniejący test i: (1) dodaj krok logujący dane w formie tabeli
+HTML przez `Log ... html=True`, (2) otocz jeden fragment testu
+`Set Log Level    DEBUG` / przywróceniem poprzedniego poziomu, (3) uruchom
+suite z flagą `--xunit xunit.xml` i sprawdź wygenerowany plik, (4) napisz
+minimalny Listener logujący nazwę każdego testu do konsoli przez
+`start_test` i podepnij go flagą `--listener`.
+
+================================================================================
