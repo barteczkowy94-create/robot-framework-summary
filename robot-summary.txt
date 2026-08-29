@@ -3048,3 +3048,142 @@ minimalny Listener logujący nazwę każdego testu do konsoli przez
 `start_test` i podepnij go flagą `--listener`.
 
 ================================================================================
+# Dzień 31 (2026-08-29, sobota) - Obsługa wyjątków runda 2 (Continue On Failure, wiele wzorców w EXCEPT, własne klasy wyjątków, Run Keyword And Return Status)
+
+## 1. Temat dnia
+Druga runda tematu obsługi wyjątków - techniki pomijane przy pierwszym
+podejściu: `Run Keyword And Continue On Failure` do zbierania wielu błędów
+w jednym przebiegu, dopasowywanie kilku wzorców błędów w jednej klauzuli
+`EXCEPT`, rzucanie i łapanie własnych klas wyjątków zdefiniowanych w
+bibliotece Pythonowej oraz `Run Keyword And Return Status` do warunkowego
+sterowania przepływem testu.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- `Run Keyword And Continue On Failure` oznacza krok jako niepowodzenie, ale
+  NIE przerywa testu - przydatne przy zbiorczej weryfikacji kilku
+  niezależnych asercji naraz i zebraniu wszystkich błędów w jednym raporcie
+  zamiast przerywania na pierwszym z nich.
+- Jedna klauzula `EXCEPT` może łapać kilka wzorców na raz, np.
+  `EXCEPT    ValueError: *    TypeError: *` - rozdzielone spacją wzorce są
+  traktowane jako alternatywa (dowolny z nich pasuje).
+- Definiuj własne klasy wyjątków w bibliotece Pythona (`class
+  ZamowienieError(Exception)`) zamiast rzucać generyczny `Exception` -
+  pozwala to precyzyjnie łapać konkretny typ błędu biznesowego w `EXCEPT`
+  i odróżnić go od błędów programistycznych.
+- `Run Keyword And Return Status` zwraca `${True}`/`${False}` zamiast
+  rzucać/zgłaszać błąd - dobre do sterowania logiką testu (np. IF na
+  podstawie tego, czy krok się powiódł), ale NIE zastępuje właściwej
+  asercji, bo niepowodzenie nie trafia do logu jako FAIL.
+- Nie zagnieżdżaj TRY/EXCEPT zbyt głęboko w plikach .robot - jeśli logika
+  obsługi błędów robi się rozbudowana, przenieś ją do keyworda/biblioteki
+  Pythona, gdzie łatwiej ją przetestować i utrzymać.
+
+## 3. Przykładowy kod
+Biblioteka Pythona z własną klasą wyjątku `libraries/OrderValidator.py`:
+```python
+from robot.api import logger
+
+
+class ZamowienieError(Exception):
+    """Wlasny wyjatek dla bledow logiki biznesowej zamowien."""
+
+
+class OrderValidator:
+    def waliduj_zamowienie(self, wartosc: int):
+        if wartosc <= 0:
+            raise ZamowienieError(f"Nieprawidlowa wartosc zamowienia: {wartosc}")
+        logger.info(f"Zamowienie o wartosci {wartosc} jest poprawne")
+        return True
+```
+
+Plik testowy `tests/exceptions_runda2.robot`:
+```robotframework
+*** Settings ***
+Documentation     Runda 2: obsluga wyjatkow - Continue On Failure, wiele wzorcow, wlasne wyjatki.
+Library           ${CURDIR}/../libraries/OrderValidator.py
+
+*** Test Cases ***
+Zbiorcza weryfikacja kilku warunkow bez przerywania testu
+    [Documentation]    Continue On Failure zbiera wszystkie bledy w jednym przebiegu.
+    [Tags]    exceptions-runda2
+    Run Keyword And Continue On Failure    Should Be Equal    ${1}    ${2}
+    Run Keyword And Continue On Failure    Should Contain    abc    z
+    Log    Test dotarl do konca mimo dwoch niepowodzen powyzej
+
+Lapanie kilku typow bledow jedna klauzula EXCEPT
+    [Documentation]    Jedna klauzula EXCEPT z dwoma wzorcami wyjatkow.
+    [Tags]    exceptions-runda2
+    FOR    ${wejscie}    IN    abc    ${None}
+        TRY
+            Evaluate    int('${wejscie}')
+        EXCEPT    ValueError: *    TypeError: *    AS    ${blad}
+            Log    Zlapano oczekiwany blad konwersji: ${blad}
+        END
+    END
+
+Lapanie wlasnego wyjatku po typie
+    [Documentation]    EXCEPT dopasowuje sie po nazwie wlasnej klasy wyjatku.
+    [Tags]    exceptions-runda2
+    TRY
+        OrderValidator.Waliduj Zamowienie    -50
+    EXCEPT    ZamowienieError: *    AS    ${blad}
+        Log    Zlapano wlasny wyjatek biznesowy: ${blad}
+    END
+
+Warunkowy przeplyw z Run Keyword And Return Status
+    [Documentation]    Sprawdzenie statusu bez traktowania bledu jako FAIL.
+    [Tags]    exceptions-runda2
+    ${czy_poprawne}=    Run Keyword And Return Status    OrderValidator.Waliduj Zamowienie    100
+    IF    ${czy_poprawne}
+        Log    Zamowienie przeszlo walidacje
+    ELSE
+        Log    Zamowienie odrzucone przez walidacje    WARN
+    END
+```
+
+## 4. Najczęstsze błędy
+- Nadużywanie `Run Keyword And Continue On Failure` do każdego kroku testu -
+  raport staje się nieczytelny (dużo failures naraz) i trudno rozpoznać,
+  które niepowodzenie było przyczyną, a które tylko skutkiem.
+- Użycie `Run Keyword And Return Status` tam, gdzie potrzebna jest właściwa
+  asercja - błąd biznesowy zamienia się w ciche `${False}`, więc test może
+  zakończyć się PASS mimo realnego problemu, jeśli ktoś zapomni sprawdzić
+  zwróconą wartość.
+- Łapanie zbyt szerokiego typu (`Exception: *` zamiast konkretnej klasy) w
+  `EXCEPT` - test przechodzi nawet wtedy, gdy rzucony zostanie zupełnie
+  inny, nieoczekiwany błąd niż ten faktycznie testowany.
+- Rzucanie generycznego `Exception`/`AssertionError` zamiast własnych klas
+  wyjątków w bibliotece Pythona - w testach nie da się odróżnić błędu
+  walidacji biznesowej od błędu programistycznego (np. literówki w kodzie).
+- Głębokie zagnieżdżanie TRY/EXCEPT bezpośrednio w plikach .robot zamiast
+  wydzielenia logiki do keyworda/biblioteki Pythona - kod staje się trudny
+  do śledzenia i utrzymania przez cały zespół.
+
+## 5. Ulepszenia z AI
+- Wklej istniejący plik testowy z wieloma pojedynczymi asercjami i poproś
+  Claude/Copilot o wskazanie, które z nich warto połączyć przez `Run
+  Keyword And Continue On Failure`, by zebrać wszystkie błędy w jednym
+  przebiegu.
+- Poproś AI o zaprojektowanie hierarchii własnych klas wyjątków (np.
+  `ZamowienieError`, `PlatnoscError` dziedziczące po wspólnej bazie) na
+  podstawie opisu logiki biznesowej aplikacji.
+- Wklej fragment kodu Pythona rzucającego generyczny `Exception` i poproś o
+  refaktoryzację na konkretne, nazwane klasy wyjątków wraz z odpowiadającymi
+  wzorcami `EXCEPT` w Robot Framework.
+- Użyj AI do przeglądu testów pod kątem nadużycia `Run Keyword And Return
+  Status` w miejscach, gdzie w rzeczywistości potrzebna jest jawna
+  asercja/FAIL.
+- Poproś o wygenerowanie zestawu przypadków testowych dla różnych kombinacji
+  błędów (np. tabela wejście → oczekiwany typ wyjątku) na podstawie opisu
+  walidacji API.
+
+## Zadanie na dziś
+Rozbuduj bibliotekę Pythona o własną klasę wyjątku (np. `PlatnoscError`)
+rzucaną przy niepoprawnej kwocie płatności, a następnie napisz: (1) test z
+blokiem TRY/EXCEPT łapiącym ten konkretny typ wyjątku, (2) test używający
+`Run Keyword And Continue On Failure` do zebrania kilku niezależnych
+asercji w jednym przebiegu, (3) test wykorzystujący `Run Keyword And Return
+Status` do warunkowego sterowania logiką (IF/ELSE) w zależności od wyniku
+walidacji.
+
+================================================================================
