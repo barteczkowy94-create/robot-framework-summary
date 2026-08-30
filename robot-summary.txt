@@ -3187,3 +3187,133 @@ Status` do warunkowego sterowania logiką (IF/ELSE) w zależności od wyniku
 walidacji.
 
 ================================================================================
+# Dzień 32 (2026-08-30, niedziela) - Zmienne środowiskowe i pliki konfiguracyjne runda 2 (składnia %{VAR=domyślna}, Set/Remove Environment Variable, dynamiczne pliki YAML/Python, kolejność priorytetów źródeł zmiennych)
+
+## 1. Temat dnia
+Druga runda tematu zmiennych środowiskowych i konfiguracji - elementy pominięte
+za pierwszym razem: wbudowana składnia wartości domyślnej `%{ZMIENNA=domyślna}`
+bez potrzeby wołania keywordu, keywordy `Set Environment Variable` / `Remove
+Environment Variable` / `Environment Variable Should (Not) Be Set` z biblioteki
+OperatingSystem, dynamiczne pliki zmiennych (funkcja `get_variables()` w Pythonie,
+pliki YAML) oraz jasna kolejność priorytetów, gdy ta sama zmienna pochodzi
+z kilku źródeł naraz.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Składnia `%{ZMIENNA=wartość_domyślna}` pozwala podać wartość domyślną wprost
+  w miejscu użycia, bez dodatkowego keywordu `Get Environment Variable` -
+  czytelniejsze przy jednorazowym odczycie, ale nie nadaje się do walidacji
+  "czy zmienna w ogóle istnieje".
+- `Set Environment Variable` ustawia prawdziwą zmienną środowiskową procesu
+  (widoczną też dla bibliotek/podprocesów wywoływanych przez test) - zawsze
+  usuwaj ją potem przez `Remove Environment Variable` w Teardown, inaczej
+  "wycieknie" do kolejnych testów w tym samym przebiegu.
+- `Environment Variable Should Be Set` / `Environment Variable Should Not Be
+  Set` to jawne asercje na obecność konfiguracji - używaj ich na starcie suite'u
+  (Suite Setup), by test od razu i czytelnie failował, gdy brakuje wymaganego
+  sekretu, zamiast psuć się dopiero głęboko w logice testu.
+- Funkcja `get_variables(...)` w pliku zmiennych Pythona pozwala budować
+  zmienne dynamicznie na podstawie argumentów przekazanych po ścieżce pliku
+  w `Variables` - jeden plik obsługuje wtedy wiele środowisk zamiast osobnego
+  pliku na dev/staging/prod.
+- Kolejność priorytetów źródeł zmiennych (od najwyższego): `--variable` z CLI >
+  kolejne pliki podane przez `--variablefile`/`Variables` (ostatni nadpisuje
+  poprzednie) > sekcja `*** Variables ***` w suicie. Zmienne środowiskowe
+  (`%{...}`) to osobna przestrzeń nazw i nie są automatycznie nadpisywane przez
+  `--variable` - trzeba je jawnie zmapować.
+
+## 3. Przykładowy kod
+```robotframework
+*** Settings ***
+Documentation     Runda 2: wartosci domyslne %{VAR=...}, Set/Remove Environment Variable,
+...               asercje obecnosci konfiguracji.
+Library           OperatingSystem
+Variables         config/dynamic.py    ${ENV}
+Suite Setup       Sprawdz Wymagana Konfiguracje
+Suite Teardown    Remove Environment Variable    SESSION_TOKEN
+
+*** Keywords ***
+Sprawdz Wymagana Konfiguracje
+    Environment Variable Should Be Set    API_TOKEN
+    ...    msg=Brak zmiennej API_TOKEN - ustaw ja przed uruchomieniem testow
+    Set Environment Variable    SESSION_TOKEN    sesja-${ENV}-tymczasowa
+
+*** Test Cases ***
+Odczyt zmiennej srodowiskowej z wbudowana wartoscia domyslna
+    [Documentation]    Skladnia %{VAR=domyslna} - bez keywordu, z fallbackiem.
+    [Tags]    config-runda2
+    Log    Poziom logowania: %{LOG_LEVEL=INFO}
+    Log    Sesja ustawiona w Suite Setup: %{SESSION_TOKEN}
+
+Walidacja ze zmienna NIE jest ustawiona
+    [Documentation]    Asercja negatywna - upewnia sie, ze flaga debugowania jest wylaczona.
+    [Tags]    config-runda2
+    Environment Variable Should Not Be Set    DEBUG_MODE
+```
+
+```python
+# config/dynamic.py - jeden plik zmiennych dla wielu srodowisk (funkcja get_variables)
+def get_variables(env="dev"):
+    presety = {
+        "dev": {"BASE_URL": "https://dev.example.com", "TIMEOUT": 10},
+        "staging": {"BASE_URL": "https://staging.example.com", "TIMEOUT": 15},
+        "prod": {"BASE_URL": "https://example.com", "TIMEOUT": 20},
+    }
+    return presety.get(env, presety["dev"])
+```
+
+```yaml
+# config/staging.yaml - alternatywa bez Pythona, prostszy format dla nie-programistow
+BASE_URL: https://staging.example.com
+TIMEOUT: 15
+RETRY_COUNT: 3
+```
+
+```bash
+# Kolejnosc zrodel - --variable z CLI wygrywa z plikiem zmiennych i sekcja Variables
+export API_TOKEN="tajny-token-z-sejfu-cicd"
+robot --variablefile config/staging.yaml --variable ENV:staging --variable TIMEOUT:30 tests/
+```
+
+## 4. Najczęstsze błędy
+- Mylenie `%{VAR=domyślna}` z realnym ustawieniem zmiennej środowiskowej -
+  to tylko wartość zastępcza używana w danym miejscu, nie zapisuje niczego
+  do środowiska procesu.
+- `Set Environment Variable` bez odpowiadającego `Remove Environment
+  Variable` w Teardown - zmienna zostaje ustawiona do końca całego przebiegu
+  i może wpływać na kolejne, niepowiązane testy w tym samym uruchomieniu.
+- Zakładanie, że `*** Variables ***` w suicie nadpisze wartość przekazaną
+  przez `--variable` w CLI - w rzeczywistości CLI ma najwyższy priorytet i
+  wygrywa zawsze.
+- Przekazywanie złej liczby/kolejności argumentów po ścieżce pliku w
+  `Variables config/dynamic.py ${ENV}` - `get_variables()` przyjmuje je
+  pozycyjnie jako stringi, literówka w nazwie środowiska cicho zwraca
+  wartości domyślne zamiast błędu.
+- Podawanie kilku `--variablefile` bez świadomości, że ostatni plik cicho
+  nadpisuje te same klucze z poprzednich - trudne do wyśledzenia źródło
+  nieoczekiwanej wartości w CI.
+
+## 5. Ulepszenia z AI
+- Poproś AI o przekształcenie zestawu osobnych plików `dev.py`/`staging.py`/
+  `prod.py` w jeden dynamiczny plik z funkcją `get_variables(env)`.
+- Wklej istniejący plik `.py` z konfiguracją i poproś o wygenerowanie
+  równoważnego pliku YAML (i odwrotnie) do porównania czytelności obu
+  formatów.
+- Poproś AI o wygenerowanie tabeli priorytetów źródeł zmiennych dla danego
+  projektu (CLI, pliki, sekcja Variables, zmienne środowiskowe) jako
+  dokumentacji dla zespołu.
+- Użyj AI do przeglądu suite'ów pod kątem brakujących asercji
+  `Environment Variable Should Be Set` przy wymaganych sekretach/tokenach.
+- Poproś o wygenerowanie checklisty code-review dla PR-ów zmieniających
+  konfigurację CI/CD (np. "czy nowa zmienna ma wartość domyślną i jest
+  udokumentowana w README?").
+
+## Zadanie na dziś
+Stwórz plik `config/dynamic.py` z funkcją `get_variables(env)` obsługującą
+co najmniej dwa środowiska, zaimportuj go w suicie przez `Variables
+config/dynamic.py    ${ENV}`, a następnie napisz: (1) test korzystający ze
+składni `%{ZMIENNA=domyślna}`, (2) Suite Setup z asercją `Environment
+Variable Should Be Set` dla wymaganego sekretu, (3) Suite Teardown
+czyszczący przez `Remove Environment Variable` dowolną zmienną ustawioną
+w trakcie testów przez `Set Environment Variable`.
+
+================================================================================
