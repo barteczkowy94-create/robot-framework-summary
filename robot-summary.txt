@@ -3187,3 +3187,130 @@ Status` do warunkowego sterowania logiką (IF/ELSE) w zależności od wyniku
 walidacji.
 
 ================================================================================
+================================================================================
+# Dzień 32 (2026-08-31, poniedziałek) - Zmienne środowiskowe i pliki konfiguracyjne runda 2 (Set/Get Environment Variable, priorytet zmiennych, zagnieżdżony YAML, --argumentfile)
+
+## 1. Temat dnia
+Druga runda tematu zmiennych środowiskowych i konfiguracji - tym razem od
+strony ustawiania (a nie tylko odczytu) zmiennych środowiskowych w trakcie
+testu, jasnej hierarchii priorytetów, gdy ta sama zmienna pochodzi z kilku
+źródeł naraz, pracy z zagnieżdżonym YAML-em oraz pliku `--argumentfile` do
+porządkowania długich wywołań `robot` w CI/CD.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Priorytet źródeł zmiennych w Robot Framework (od najwyższego): zmienne z
+  linii poleceń (`--variable`/`-v`) > zmienne z `--variablefile` > zmienne
+  ustawione w sekcji `*** Variables ***` suite'u > zmienne z zaimportowanych
+  Resource files - CLI zawsze wygrywa, nawet jeśli plik zmiennych jest
+  ładowany "później" w kodzie.
+- `Set Environment Variable` (OperatingSystem) ustawia zmienną środowiskową
+  tylko na czas działania bieżącego procesu Robota (i jego subprocesów, np.
+  uruchamianych przez `Process`) - nie zapisuje jej trwale w systemie ani
+  nie jest widoczna po zakończeniu testu.
+- `Get Environment Variables` (liczba mnoga!) zwraca cały słownik zmiennych
+  środowiskowych naraz - przydatne przy diagnostyce lub logowaniu, których
+  zmiennych brakuje przed startem suite'u.
+- Plik `--argumentfile` (zwykły plik tekstowy z argumentami CLI, jeden na
+  linię) porządkuje długie wywołania `robot` w pipeline'ach CI/CD - zamiast
+  rozbudowanej jednej linii z wieloma `--variable`/`--include`/`--outputdir`.
+- W plikach YAML z zagnieżdżoną strukturą dostęp do wartości odbywa się
+  notacją `${CONFIG}[sekcja][klucz]` po imporcie przez `Variables config.yaml`
+  - warto spłaszczać naprawdę często używane wartości do osobnych zmiennych
+  najwyższego poziomu, żeby testy nie były zaśmiecone długimi ścieżkami.
+
+## 3. Przykładowy kod
+```robotframework
+*** Settings ***
+Documentation     Ustawianie/odczyt zmiennych srodowiskowych oraz zagniezdzony config YAML.
+Library           OperatingSystem
+Library           Process
+Variables         config/${ENV}.yaml
+Suite Setup       Waliduj Wymagane Zmienne Srodowiskowe
+
+*** Variables ***
+${REQUEST_TIMEOUT}    ${CONFIG}[api][timeout]
+
+*** Test Cases ***
+Ustawienie zmiennej srodowiskowej dla subprocesu
+    [Documentation]    Set Environment Variable dziala tylko w tym procesie i jego dzieciach.
+    [Tags]    config-runda2
+    Set Environment Variable    FEATURE_FLAG_NEW_CHECKOUT    true
+    ${wynik}=    Run Process    python3    scripts/sprawdz_flage.py    env=${None}
+    Should Contain    ${wynik.stdout}    FEATURE_FLAG_NEW_CHECKOUT=true
+
+Przeglad wszystkich zmiennych srodowiskowych przed testem
+    [Documentation]    Get Environment Variables (liczba mnoga) zwraca caly slownik.
+    [Tags]    config-runda2
+    ${wszystkie}=    Get Environment Variables
+    Log Many    &{wszystkie}
+    Dictionary Should Contain Key    ${wszystkie}    API_TOKEN
+
+*** Keywords ***
+Waliduj Wymagane Zmienne Srodowiskowe
+    [Documentation]    Fail-fast w Suite Setup, jesli brakuje krytycznej zmiennej.
+    ${token}=    Get Environment Variable    API_TOKEN    default=${EMPTY}
+    Should Not Be Empty    ${token}
+    ...    msg=Brak zmiennej srodowiskowej API_TOKEN - ustaw ja przed uruchomieniem suite'u
+```
+
+```yaml
+# config/staging.yaml - zagniezdzona konfiguracja srodowiska "staging"
+api:
+  base_url: "https://staging.example.com/api"
+  timeout: 15s
+credentials:
+  username: "tester_staging"
+```
+
+```text
+# argfile.txt - uzywany jako: robot --argumentfile argfile.txt tests/
+--variable ENV:staging
+--variablefile config/staging.yaml
+--include smoke
+--outputdir results/staging
+```
+
+## 4. Najczęstsze błędy
+- Zakładanie, że plik zmiennych (`--variablefile`/`Variables`) nadpisze
+  wartość podaną w `--variable` z linii poleceń - w rzeczywistości jest
+  odwrotnie, CLI zawsze ma najwyższy priorytet, co prowadzi do mylących
+  "dlaczego moja zmiana w pliku nic nie zmienia" podczas debugowania.
+- Oczekiwanie, że `Set Environment Variable` zmieni zmienną globalnie w
+  systemie operacyjnym lub że będzie widoczna w kolejnym, osobnym
+  uruchomieniu `robot` - działa wyłącznie w obrębie bieżącego procesu.
+- Głębokie zagnieżdżenie w YAML (`${CONFIG}[a][b][c][d]`) rozsiane po
+  wielu testach zamiast jednorazowego spłaszczenia w sekcji `*** Variables
+  ***` suite'u - utrudnia czytanie i refaktoryzację przy zmianie struktury
+  configu.
+- Commitowanie `--argumentfile` zawierającego realne sekrety (tokeny,
+  hasła) zamiast tylko nazw środowisk i ścieżek do plików - sekrety nadal
+  powinny trafiać przez prawdziwe zmienne środowiskowe CI/CD.
+- Walidacja wymaganych zmiennych "przy okazji", w środku pierwszego testu
+  który akurat ich potrzebuje, zamiast raz, fail-fast, w `Suite Setup` -
+  przez co błąd konfiguracji ujawnia się dopiero po części przebiegu.
+
+## 5. Ulepszenia z AI
+- Wklej listę potrzebnych flag `--variable`/`--variablefile`/`--include` i
+  poproś Claude/Copilot o wygenerowanie gotowego `argfile.txt` dla każdego
+  środowiska (dev/staging/prod).
+- Poproś AI o wygenerowanie keyworda `Waliduj Wymagane Zmienne
+  Srodowiskowe` na podstawie listy nazw zmiennych wymaganych przez projekt.
+- Wklej zagnieżdżony plik YAML i poproś o wygenerowanie "spłaszczonych"
+  zmiennych najwyższego poziomu (np. `${API_BASE_URL}`,
+  `${API_TIMEOUT}`) do użycia w testach zamiast długich ścieżek `[a][b][c]`.
+- Użyj AI do przeglądu suite'ów pod kątem miejsc, gdzie ta sama zmienna
+  pochodzi z kilku niespójnych źródeł (raz z CLI, raz z pliku, raz na
+  sztywno) i poproś o rekomendację jednego, spójnego źródła prawdy.
+- Poproś o wygenerowanie krótkiej dokumentacji README opisującej priorytet
+  źródeł zmiennych w projekcie, żeby nowi członkowie zespołu nie zgadywali,
+  która wartość "wygra".
+
+## Zadanie na dziś
+Stwórz plik `argfile.txt` z flagami `--variable ENV:staging` oraz
+`--variablefile config/staging.yaml`, uruchom testy komendą
+`robot --argumentfile argfile.txt tests/`, a następnie dodaj `Suite Setup`
+wywołujący keyword, który przez `Get Environment Variable` sprawdza
+obecność wymaganej zmiennej (np. `API_TOKEN`) i kończy suite czytelnym
+błędem (fail-fast), zanim wykona się jakikolwiek właściwy test.
+
+================================================================================
