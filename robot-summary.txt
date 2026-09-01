@@ -3314,3 +3314,141 @@ obecność wymaganej zmiennej (np. `API_TOKEN`) i kończy suite czytelnym
 błędem (fail-fast), zanim wykona się jakikolwiek właściwy test.
 
 ================================================================================
+# Dzień 33 (2026-09-01, wtorek) - RPA z Robot Framework runda 2 (Work Items, BusinessException vs ApplicationException, RPA.PDF, RPA.Desktop)
+
+## 1. Temat dnia
+Druga runda RPA - tym razem nie sam szkielet `*** Tasks ***`, tylko mechanizmy
+potrzebne w prawdziwych, produkcyjnych procesach uruchamianych w orkiestratorze
+(np. Control Room/Robocorp): Work Items do przekazywania danych między
+uruchomieniami procesu, jasne rozróżnienie błędu biznesowego od technicznego
+(decyduje, czy proces ma być automatycznie ponowiony), ekstrakcja danych z
+plików PDF oraz automatyzacja aplikacji desktopowych, gdy nie ma dostępnego
+API ani interfejsu webowego.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- `RPA.Robocorp.WorkItems` służy do przekazywania danych WEJŚCIOWYCH i
+  WYJŚCIOWYCH między krokami/uruchomieniami procesu w orkiestratorze - dzięki
+  temu proces nie musi znać z góry wszystkich danych (np. listy zamówień),
+  tylko odbiera je jako kolejne "paczki" (`Get Work Item Variables`) i po
+  przetworzeniu każdej tworzy wynikowy Work Item (`Create Output Work Item`).
+- Rozróżniaj `BusinessException` (błąd danych/logiki biznesowej, np. brak
+  NIP-u klienta - proces ma się kontrolowanie zatrzymać z czytelnym
+  komunikatem, orkiestrator NIE powinien automatycznie ponawiać) od
+  `ApplicationException` (błąd techniczny, np. timeout API - orkiestrator
+  MOŻE bezpiecznie spróbować ponownie) - to rozróżnienie decyduje o
+  zachowaniu retry na poziomie orkiestratora, a nie tylko o treści logu.
+- `RPA.PDF` pozwala zarówno odczytać tekst/tabele z PDF-a (`Get Text From
+  PDF`, `Extract Tables From PDF`), jak i wypełnić formularz PDF danymi -
+  używaj tego zamiast prób parsowania PDF-a jako zwykłego tekstu w Pythonie
+  od zera.
+- `RPA.Desktop`/`RPA.Windows` automatyzują aplikacje desktopowe (Win32,
+  legacy) przez współrzędne, obrazy lub drzewo elementów UI, gdy aplikacja
+  nie ma API ani warstwy webowej - traktuj to jako ostateczność, bo lokatory
+  oparte na współrzędnych/obrazach są znacznie bardziej kruche niż selektory
+  webowe.
+- Każde pojedyncze uruchomienie procesu operujące na jednym Work Itemie
+  powinno kończyć się jawnym oznaczeniem stanu (`Release Work Item` ze
+  statusem `DONE`/`FAILED`) - dzięki temu w Control Room widać dokładnie,
+  które rekordy przeszły, a które wymagają ręcznej interwencji.
+
+## 3. Przykładowy kod
+```robotframework
+*** Settings ***
+Documentation     Przetwarzanie zamowien z Work Items, z rozroznieniem bledu biznesowego i technicznego.
+Library           RPA.Robocorp.WorkItems
+Library           RPA.PDF
+Library           Collections
+
+*** Tasks ***
+Przetworz pojedyncze zamowienie z Work Item
+    [Documentation]    Kazde uruchomienie obsluguje jeden Work Item z kolejki wejsciowej.
+    ${dane}=    Get Work Item Variables
+    TRY
+        Should Not Be Empty    ${dane}[nip_klienta]
+        ...    msg=Brak NIP-u klienta w danych zamowienia
+    EXCEPT    AS    ${blad}
+        Log    Blad biznesowy: ${blad}    level=ERROR
+        Release Work Item    FAILED    exception_type=BUSINESS
+        ...    code=BRAK_NIP    message=${blad}
+        RETURN
+    END
+
+    TRY
+        ${tekst_faktury}=    Get Text From PDF    ${dane}[sciezka_pdf]
+    EXCEPT    AS    ${blad}
+        Log    Blad techniczny odczytu PDF: ${blad}    level=ERROR
+        Release Work Item    FAILED    exception_type=APPLICATION
+        ...    code=BLAD_ODCZYTU_PDF    message=${blad}
+        RETURN
+    END
+
+    Create Output Work Item
+    ...    payload=&{dane}
+    ...    files=${dane}[sciezka_pdf]
+    Release Work Item    DONE
+```
+
+```python
+# Przyklad wlasnych wyjatkow z rozroznieniem typu bledu (uzywane w bibliotece Pythona)
+from robocorp.tasks import task
+from robocorp.workitems import BusinessException, ApplicationException
+
+
+def waliduj_nip(nip: str) -> None:
+    if not nip:
+        raise BusinessException("Brak NIP-u klienta - wymagane pole formularza")
+
+
+def pobierz_kurs_waluty(api) -> float:
+    try:
+        return api.get_exchange_rate()
+    except TimeoutError as blad:
+        raise ApplicationException(f"Timeout przy pobieraniu kursu: {blad}")
+```
+
+## 4. Najczęstsze błędy
+- Traktowanie każdego błędu w procesie tak samo (jeden ogólny `Fail`) -
+  bez rozróżnienia biznesowy/techniczny orkiestrator albo bezsensownie
+  ponawia błędy danych, albo wcale nie ponawia realnych awarii technicznych.
+- Ładowanie WSZYSTKICH danych do przetworzenia na starcie procesu zamiast
+  korzystania z Work Items - przy tysiącach rekordów proces staje się
+  ciężki do monitorowania i trudny do ponownego uruchomienia od miejsca
+  awarii.
+- Parsowanie PDF-a jako surowego tekstu (np. `Get File`) zamiast użycia
+  dedykowanych keywordów `RPA.PDF` do ekstrakcji tabel/pól formularza -
+  prowadzi do kruchego, trudnego w utrzymaniu kodu.
+- Nadużywanie automatyzacji desktopowej (`RPA.Desktop`) tam, gdzie
+  aplikacja ma jednak dostępne API lub stabilny interfejs webowy - lokatory
+  oparte na współrzędnych/obrazach psują się przy każdej zmianie
+  rozdzielczości czy wersji systemu.
+- Brak jawnego oznaczenia Work Itemu jako `FAILED`/`DONE` po przetworzeniu -
+  bez tego orkiestrator nie wie, czy dany rekord wymaga ponowienia, a
+  historia przebiegów w Control Room staje się nieczytelna.
+
+## 5. Ulepszenia z AI
+- Wklej opis procesu biznesowego i poproś AI o wskazanie, które kroki
+  powinny rzucać `BusinessException`, a które `ApplicationException`, wraz
+  z uzasadnieniem.
+- Podaj przykładowy PDF (strukturę pól/tabel) i poproś o wygenerowanie
+  keywordów `RPA.PDF` do wyciągnięcia konkretnych danych (np. numeru
+  faktury, kwoty brutto).
+- Poproś AI o wygenerowanie mapowania Work Item -> zmienne Robot Framework
+  wraz z walidacją wymaganych pól na podstawie przykładowego payloadu JSON.
+- Użyj AI do przeglądu istniejącego procesu RPA pod kątem miejsc, gdzie
+  brakuje jawnego `Release Work Item` albo gdzie błąd biznesowy jest
+  mylony z technicznym.
+- Poproś o propozycję strategii migracji z automatyzacji `RPA.Desktop`
+  (oparta na współrzędnych) na stabilniejsze podejście (API/web), jeśli
+  takie jest dostępne dla danej aplikacji.
+
+## Zadanie na dziś
+Napisz proces w sekcji `*** Tasks ***`, który przez `Get Work Item
+Variables` odbiera dane jednego "zamówienia" (np. słownik z polami
+`nip_klienta` i `kwota`), waliduje je i w przypadku braku danych rzuca
+błąd traktowany jako biznesowy (`Release Work Item FAILED` z
+`exception_type=BUSINESS`), a w przypadku symulowanego błędu technicznego
+(np. wymuszony wyjątek) oznacza Work Item jako `exception_type=APPLICATION`.
+Na końcu, dla poprawnych danych, utwórz `Create Output Work Item` z
+przetworzonym payloadem.
+
+================================================================================
