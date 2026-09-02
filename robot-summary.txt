@@ -3452,3 +3452,135 @@ Na końcu, dla poprawnych danych, utwórz `Create Output Work Item` z
 przetworzonym payloadem.
 
 ================================================================================
+# Dzień 34 (2026-09-02, środa) - Dobre praktyki runda 2 (warstwy keywordów, niezależność testów, unikanie Sleep, wspólne komponenty)
+
+## 1. Temat dnia
+Druga runda dobrych praktyk - tym razem nie sama struktura katalogów, tylko
+architektura na poziomie keywordów w większym projekcie: podział na warstwy
+(Test Case -> keyword biznesowy -> keyword techniczny), zapewnienie pełnej
+niezależności testów od siebie nawzajem, świadome unikanie `Sleep` na rzecz
+jawnych oczekiwań oraz wydzielanie wspólnych komponentów UI (np. nagłówka,
+modali), żeby nie duplikować tych samych fragmentów w wielu Page Objectach.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Stosuj architekturę czterowarstwową: **Test Case** (język biznesowy) ->
+  **keyword biznesowy/domenowy** (np. "Złóż Zamówienie Z Jednym Produktem",
+  łączy kilka kroków w scenariusz) -> **keyword techniczny/Page Object**
+  (np. "Kliknij Przycisk Dodaj Do Koszyka", zna locator) -> wywołanie
+  biblioteki niskopoziomowej (`Click`, `Fill Text`). Każda warstwa zna tylko
+  warstwę bezpośrednio pod sobą - test nigdy nie wywołuje `Click` wprost.
+- Każdy test musi być w pełni niezależny: mieć własny `Setup`/`Teardown`
+  tworzący i sprzątający swoje dane, i dawać się uruchomić pojedynczo
+  (`robot --test "Nazwa"`) lub w dowolnej kolejności/równolegle (`pabot`)
+  bez polegania na stanie zostawionym przez inny test.
+- Nigdy nie używaj `Sleep` jako sposobu na "poczekanie, aż coś się załaduje"
+  - zamiast tego stosuj jawne oczekiwania (`Wait For Elements State` w
+  Browser Library, `Wait Until Keyword Succeeds` przy API) powiązane z
+  konkretnym warunkiem, a nie ze stałym czasem.
+- Powtarzające się fragmenty UI (nagłówek, stopka, modal potwierdzenia,
+  komponent logowania osadzony na wielu stronach) wydzielaj do osobnych
+  "component" resource'ów importowanych przez wiele Page Objectów, zamiast
+  kopiować te same keywordy/locatory w każdym z nich.
+- Utrzymuj checklistę code review dla nowych/zmienianych plików `.robot` i
+  `.resource` (np. brak locatorów w testach, brak `Sleep`, nazwy zgodne z
+  konwencją, test ma niezależny setup/teardown) i stosuj ją konsekwentnie
+  przy każdym pull requeście, tak samo jak lint/format w innych językach.
+
+## 3. Przykład kodu
+Komponent wspólny `resources/components/navbar.resource`:
+```robotframework
+*** Settings ***
+Library           Browser
+
+*** Variables ***
+${NAVBAR_CART_ICON}      css=header .cart-icon
+${NAVBAR_LOGOUT_LINK}    css=header a.logout
+
+*** Keywords ***
+Przejdz Do Koszyka Z Naglowka
+    [Documentation]    Klika ikone koszyka widoczna na kazdej stronie aplikacji.
+    Wait For Elements State    ${NAVBAR_CART_ICON}    visible
+    Click    ${NAVBAR_CART_ICON}
+
+Wyloguj Sie Z Naglowka
+    [Documentation]    Wylogowuje uzytkownika przez link w naglowku.
+    Click    ${NAVBAR_LOGOUT_LINK}
+```
+
+Keyword biznesowy łączący kilka warstw `resources/business/zamowienia.resource`:
+```robotframework
+*** Settings ***
+Library           Browser
+Resource          ../pages/katalog_page.resource
+Resource          ../pages/koszyk_page.resource
+Resource          ../components/navbar.resource
+
+*** Keywords ***
+Zloz Zamowienie Z Jednym Produktem
+    [Documentation]    Scenariusz biznesowy: dodaj produkt do koszyka i sfinalizuj zamowienie.
+    [Arguments]    ${nazwa_produktu}
+    Dodaj Produkt Do Koszyka    ${nazwa_produktu}
+    Przejdz Do Koszyka Z Naglowka
+    Potwierdz Zamowienie
+    Zamowienie Powinno Byc Potwierdzone
+```
+
+Test korzystający wyłącznie z warstwy biznesowej, z niezależnym setup/teardown
+`tests/zamowienia.robot`:
+```robotframework
+*** Settings ***
+Documentation     Testy skladania zamowien, kazdy test niezalezny od innych.
+Resource          ../resources/business/zamowienia.resource
+Test Setup        Otworz Przegladarke I Zaloguj Sie Jako Nowy Uzytkownik
+Test Teardown     Usun Konto Testowe I Zamknij Przegladarke
+
+*** Test Cases ***
+Uzytkownik Sklada Zamowienie Z Jednym Produktem
+    [Tags]    smoke    zamowienia
+    Zloz Zamowienie Z Jednym Produktem    Kubek Termiczny
+```
+
+## 4. Najczęstsze błędy
+- Wywoływanie niskopoziomowych keywordów biblioteki (`Click`, `Fill Text`)
+  bezpośrednio w keywordzie biznesowym z pominięciem warstwy Page Objectu -
+  logika i locatory mieszają się, trudno potem podmienić samą technikę
+  automatyzacji bez przepisywania scenariuszy biznesowych.
+- Testy, które zakładają, że poprzedni test "zostawił" dane (np. konto,
+  produkt w koszyku) - działają tylko w jednej, ustalonej kolejności i
+  wywracają się przy `pabot` albo przy uruchomieniu pojedynczego testu.
+- Nadużywanie `Sleep ${5}` "na wszelki wypadek" w wielu miejscach zamiast
+  jednego, dobrze napisanego jawnego oczekiwania - spowalnia cały pakiet
+  testów i tak i tak czasem zawodzi przy wolniejszym środowisku.
+- Kopiowanie tych samych locatorów nagłówka/stopki do każdego Page Objectu
+  zamiast wydzielenia wspólnego komponentu - zmiana w nagłówku wymusza
+  edycję dziesiątek plików naraz.
+- Checklisty code review istniejące tylko "w głowie" jednej osoby w
+  zespole, nienapisane nigdzie - nowi członkowie zespołu nie znają
+  konwencji i każdy PR wygląda inaczej.
+
+## 5. Ulepszenia z AI
+- Wklej istniejący keyword biznesowy i poproś AI o wskazanie, czy nie
+  wywołuje bezpośrednio niskopoziomowych keywordów biblioteki (Click,
+  Fill Text) z pominięciem warstwy Page Objectu, i o propozycję refaktoryzacji.
+- Poproś AI o przegląd zestawu testów pod kątem ukrytych zależności
+  między nimi (np. test B zakłada dane utworzone przez test A) na
+  podstawie samych plików `.robot`, bez uruchamiania.
+- Wklej plik `.resource` z wieloma wystąpieniami `Sleep` i poproś AI o
+  zamianę każdego na odpowiedni jawny warunek oczekiwania (`Wait For
+  Elements State`, `Wait Until Keyword Succeeds`) dopasowany do kontekstu.
+- Poproś AI o wygenerowanie checklisty code review dla projektu RF w
+  formie pliku `.md`, na podstawie opisu obecnych konwencji zespołu.
+- Podaj listę Page Objectów i poproś AI o wskazanie duplikatów
+  locatorów/keywordów, które nadają się do wydzielenia do wspólnego
+  komponentu.
+
+## Zadanie na dziś
+Weź dwa dowolne, istniejące (lub napisane wcześniej w tym cyklu) testy
+webowe korzystające z tego samego nagłówka/paska nawigacji aplikacji.
+Wydziel wspólne locatory i keywordy nagłówka do osobnego pliku
+`resources/components/navbar.resource`, zaimportuj go w odpowiednich Page
+Objectach i podmień zduplikowany kod na wywołania nowych, wspólnych
+keywordów. Na końcu upewnij się, że oba testy nadal przechodzą uruchomione
+zarówno razem, jak i osobno (`robot --test`).
+
+================================================================================
