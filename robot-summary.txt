@@ -3584,3 +3584,141 @@ keywordów. Na końcu upewnij się, że oba testy nadal przechodzą uruchomione
 zarówno razem, jak i osobno (`robot --test`).
 
 ================================================================================
+# Dzień 35 (2026-09-03, czwartek) - CI/CD integracja runda 2 (macierz przeglądarek, pabot w CI, cache zależności, sekrety, harmonogram nocny)
+
+## 1. Temat dnia
+Druga runda CI/CD - tym razem nie sam "hello world" workflow, tylko
+zagadnienia, które pojawiają się dopiero przy większym, dojrzalszym
+projekcie: uruchamianie testów równolegle w CI przez `pabot`, macierz
+(matrix) kombinacji przeglądarek/środowisk w GitHub Actions, cache'owanie
+zależności pip między buildami, bezpieczne przekazywanie sekretów/danych
+logowania do testów oraz harmonogram nocnego uruchomienia pełnego
+regresu niezależnie od pushów.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Do równoległego wykonania testów w CI używaj `pabot` zamiast zwykłego
+  `robot` - w GitHub Actions/Jenkinsie warto z góry ustalić liczbę
+  workerów (`--processes`) dopasowaną do liczby rdzeni runnera, żeby nie
+  przeciążyć maszyny.
+- Macierz (`strategy: matrix` w GitHub Actions) pozwala uruchomić ten sam
+  workflow równolegle dla kilku przeglądarek/wersji Pythona - każda
+  kombinacja trafia do osobnego joba i osobnego artefaktu z wynikami.
+- Cache'uj katalog zależności (`actions/cache` z kluczem opartym o hash
+  `requirements.txt`) - znacząco skraca czas instalacji pip przy każdym
+  uruchomieniu, zwłaszcza gdy pipeline odpala się przy każdym pushu.
+- Dane logowania i sekrety (hasła do środowiska testowego, tokeny API)
+  przekazuj do testów wyłącznie przez zmienne środowiskowe/sekrety CI
+  (`secrets.` w GitHub Actions, `credentials()` w Jenkinsie), nigdy jako
+  wartości na sztywno w plikach `.robot` trzymanych w repo.
+- Oddzielaj szybki pipeline uruchamiany przy każdym pushu/PR (smoke) od
+  harmonogramu nocnego (`schedule: cron` w GitHub Actions) uruchamiającego
+  pełny zestaw regresyjny - wyniki nocnego przebiegu warto przechowywać
+  dłużej (np. `retention-days`) niż wyniki zwykłego builda z PR.
+
+## 3. Przykład kodu
+Workflow GitHub Actions z macierzą przeglądarek, cache'em pip, `pabot` i
+harmonogramem nocnym `.github/workflows/robot-regression.yml`:
+```yaml
+name: Robot Framework Regression
+
+on:
+  pull_request:
+  schedule:
+    - cron: "0 2 * * *"   # co noc o 2:00 UTC
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache zaleznosci pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Instaluj zaleznosci
+        run: pip install -r requirements.txt
+
+      - name: Testy rownolegle przez pabot
+        env:
+          APP_LOGIN:    ${{ secrets.APP_LOGIN }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+        run: |
+          pabot --processes 4 --outputdir results \
+                --variable BROWSER:${{ matrix.browser }} \
+                tests/
+
+      - name: Opublikuj wyniki jako artefakt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: robot-results-${{ matrix.browser }}
+          path: results/
+          retention-days: ${{ github.event_name == 'schedule' && 30 || 7 }}
+```
+
+Odczyt sekretu w kodzie testu `resources/logowanie.resource`:
+```robotframework
+*** Keywords ***
+Zaloguj Sie Danymi Ze Srodowiska CI
+    [Documentation]    Loguje sie danymi przekazanymi jako zmienne srodowiskowe,
+    ...                nigdy nie hardkoduje hasla w repozytorium.
+    ${login}=       Get Environment Variable    APP_LOGIN
+    ${haslo}=       Get Environment Variable    APP_PASSWORD
+    Fill Text    css=#login       ${login}
+    Fill Text    css=#password    ${haslo}
+    Click         css=#submit
+```
+
+## 4. Najczęstsze błędy
+- Uruchamianie `pabot` w CI z domyślną/za dużą liczbą workerów bez
+  dopasowania do limitów runnera - testy zaczynają się nawzajem wysadzać
+  (timeouty, brak pamięci) zamiast przyspieszać pipeline.
+- Wpisanie loginu/hasła testowego wprost do pliku `.robot` "tymczasowo do
+  testów" - trafia do historii gita na stałe, nawet po późniejszym
+  usunięciu z najnowszego commita.
+- Uruchamianie w każdym PR pełnego, wielogodzinnego zestawu regresyjnego
+  zamiast szybkiego smoke-setu - deweloperzy czekają zbyt długo na
+  feedback i zaczynają ignorować czerwony status buildu.
+- Cache pip z kluczem niezależnym od `requirements.txt` (np. stały string)
+  - po zmianie zależności CI używa starej, nieaktualnej wersji cache'u i
+  testy failują z powodu niezgodnych wersji bibliotek.
+- Brak `fail-fast: false` przy macierzy przeglądarek - awaria testów na
+  jednej przeglądarce (np. firefox) automatycznie przerywa jeszcze
+  trwające joby dla pozostałych przeglądarek, zanim zdążą się dokończyć.
+
+## 5. Ulepszenia z AI
+- Podaj AI liczbę rdzeni/pamięci runnera CI i liczbę testów, a poproś o
+  wyliczenie sensownej liczby workerów `--processes` dla `pabot` w tym
+  konkretnym pipeline'ie.
+- Wklej istniejący workflow GitHub Actions/Jenkinsfile i poproś AI o
+  znalezienie miejsc, gdzie dane logowania są wpisane na sztywno zamiast
+  jako `secrets`/`credentials()`.
+- Poproś AI o przekształcenie prostego workflow z jedną przeglądarką w
+  wersję z `strategy: matrix` obejmującą kilka przeglądarek/wersji Pythona.
+- Poproś o wygenerowanie osobnego workflow na harmonogram nocny (cron)
+  na podstawie istniejącego workflow uruchamianego przy pushu, z dłuższym
+  `retention-days` dla artefaktów.
+- Podaj AI log z nieudanego równoległego przebiegu `pabot` (fragment
+  `output.xml` lub stdout) i poproś o wskazanie, czy awaria wynika z
+  kolizji danych testowych między workerami.
+
+## Zadanie na dziś
+Rozbuduj istniejący (lub napisany wcześniej w tym cyklu) workflow GitHub
+Actions tak, aby: 1) uruchamiał testy przez `pabot --processes 2` zamiast
+zwykłego `robot`, 2) cache'ował katalog `~/.cache/pip` z kluczem opartym o
+hash pliku `requirements.txt`, 3) dodatkowo posiadał wpis `schedule: cron`
+uruchamiający pełny zestaw testów raz dziennie w nocy, niezależnie od
+pushów i pull requestów.
+
+================================================================================
