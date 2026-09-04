@@ -406,3 +406,88 @@
   przekazany string na wskazany typ (int, float, bool) przed wywołaniem
 - robot.api.logger zamiast print() -> jedyny poprawny sposób logowania z
   poziomu biblioteki Pythona, żeby wpis trafił do log.html
+
+## Tydzień 7 - Quiz (piątek, 2026-09-04) - Dni 30-35
+
+1. Do czego służy `Log ... html=True` w Robot Framework?
+   a) Zapisuje log wyłącznie do pliku xunit.xml  b) Pozwala osadzić własny
+      HTML (np. obrazek ze zrzutem ekranu, tabelę) bezpośrednio w log.html
+   c) Wyłącza logowanie dla danego kroku  d) Działa tylko z SeleniumLibrary
+
+2. Czym różni się `Run Keyword And Continue On Failure` od zwykłej asercji?
+   a) Niczym, to synonimy  b) Oznacza krok jako niepowodzenie, ale NIE
+      przerywa wykonania testu, co pozwala zebrać kilka błędów naraz
+   c) Działa tylko w sekcji Suite Teardown  d) Automatycznie ponawia krok
+      trzykrotnie przed zgłoszeniem błędu
+
+3. Jaki jest priorytet źródeł zmiennych w Robot Framework, gdy ta sama
+   zmienna pochodzi z kilku miejsc naraz?
+   a) Resource file zawsze wygrywa  b) Zmienne z linii poleceń
+      (--variable) mają najwyższy priorytet, przed --variablefile i
+      *** Variables ***  c) Wygrywa zmienna zaimportowana jako ostatnia,
+      niezależnie od źródła  d) *** Variables *** w suicie zawsze wygrywa
+
+4. Czym różni się `BusinessException` od `ApplicationException` w procesie RPA?
+   a) Niczym, oba oznaczają to samo dla orkiestratora  b) Business dotyczy
+      błędu danych/logiki biznesowej (proces ma się zatrzymać bez
+      automatycznego ponawiania), Application to błąd techniczny, który
+      orkiestrator może bezpiecznie ponowić  c) Application dotyczy tylko
+      błędów sieciowych PDF-a  d) Business Exception zawsze przerywa cały
+      orkiestrator, a Application nigdy
+
+5. Na czym polega architektura czterowarstwowa dobrych praktyk RF (runda 2)?
+   a) Test Case -> keyword biznesowy -> keyword techniczny/Page Object ->
+      wywołanie biblioteki niskopoziomowej, gdzie test nigdy nie wywołuje
+      np. Click wprost  b) Cztery osobne repozytoria dla każdej warstwy
+      testów  c) Cztery różne środowiska (dev/test/staging/prod) uruchamiane
+      równolegle  d) Podział testów na cztery pliki .robot niezależnie od
+      ich tematyki
+
+6. Dlaczego w dobrych praktykach RF (runda 2) odradza się używanie `Sleep`?
+   a) Sleep jest wolniejszy od Wait Until Keyword Succeeds  b) Sleep
+      czeka zawsze stałą ilość czasu niezależnie od realnego stanu
+      aplikacji, zamiast jawnego oczekiwania powiązanego z konkretnym
+      warunkiem (np. Wait For Elements State)  c) Sleep nie działa w
+      Browser Library  d) Sleep powoduje błędy składniowe w .robot
+
+7. Co robi flaga `--rerunfailed` w komendzie `robot`?
+   a) Uruchamia od nowa cały suite testów  b) Ponawia WYŁĄCZNIE testy,
+      które zakończyły się FAIL w podanym pliku output.xml  c) Automatycznie
+      naprawia nieudane testy  d) Usuwa nieudane testy z raportu
+
+8. Jaka jest główna różnica między `robot --dryrun` a normalnym
+   uruchomieniem testów?
+   a) Dryrun sprawdza istnienie keywordów, poprawność argumentów i importy,
+      ale NIE wykonuje faktycznych kroków (np. klikania, wywołań API)
+   b) Dryrun jest szybszą wersją normalnego uruchomienia z identycznym
+      wykonaniem kroków  c) Dryrun uruchamia tylko testy z tagiem "smoke"
+   d) Dryrun działa wyłącznie z RequestsLibrary
+
+**Odpowiedzi:** 1-b, 2-b, 3-b, 4-b, 5-a, 6-b, 7-b, 8-a
+
+## Tydzień 7 - Fiszki
+
+- Log ... html=True -> osadza własny HTML (np. zrzut ekranu, tabelę) wprost
+  w log.html zamiast surowego tekstu
+- Run Keyword And Continue On Failure -> zbiera kilka błędów w jednym
+  przebiegu testu, nie przerywając wykonania po pierwszym niepowodzeniu
+- Listener API (--listener) -> podpięcie własnego kodu Pythona pod
+  zdarzenia RF (start/end testu, keyworda) do powiadomień/metryk w czasie rzeczywistym
+- Priorytet zmiennych -> CLI (--variable) > --variablefile >
+  *** Variables *** suite'u > zmienne z Resource files
+- Set Environment Variable -> działa tylko w obrębie bieżącego procesu
+  Robota i jego subprocesów, nie zapisuje trwale w systemie
+- --argumentfile -> plik tekstowy z flagami CLI (jedna na linię),
+  porządkuje długie wywołania robot w CI/CD
+- BusinessException vs ApplicationException -> błąd danych/logiki (bez
+  retry) kontra błąd techniczny (orkiestrator może bezpiecznie ponowić)
+- RPA.PDF -> dedykowane keywordy do odczytu tekstu/tabel z PDF i
+  wypełniania formularzy PDF, zamiast parsowania PDF jako zwykłego tekstu
+- Architektura czterowarstwowa -> Test Case -> keyword biznesowy -> keyword
+  techniczny/Page Object -> biblioteka niskopoziomowa (Click, Fill Text)
+- Unikanie Sleep -> zamiast stałego opóźnienia stosuj jawne oczekiwania
+  (Wait For Elements State, Wait Until Keyword Succeeds) powiązane z warunkiem
+- --rerunfailed + rebot --merge -> ponawia tylko testy FAIL z output.xml,
+  a potem scala oryginalny i ponowiony wynik w jeden raport
+- robot --dryrun -> szybka walidacja składni/importów/keywordów bez
+  faktycznego wykonania kroków testu

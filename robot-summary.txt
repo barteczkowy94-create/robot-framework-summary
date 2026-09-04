@@ -3722,3 +3722,120 @@ uruchamiający pełny zestaw testów raz dziennie w nocy, niezależnie od
 pushów i pull requestów.
 
 ================================================================================
+# Dzień 36 (2026-09-04, piątek) - Debugowanie testów runda 2 (--dryrun, robotframework-debuglibrary, VS Code debugger, --rerunfailed, TRACE)
+
+## 1. Temat dnia
+Druga runda debugowania - tym razem techniki wykraczające poza RIDE i
+lintery: walidacja składni bez realnego uruchomienia (`--dryrun`),
+interaktywny debugger z prawdziwym breakpointem (`robotframework-debuglibrary`),
+debugowanie krok-po-kroku w VS Code z rozszerzeniem Robot Framework Language
+Server, szybkie ponawianie tylko nieudanych testów (`--rerunfailed`) oraz
+najgłębszy poziom logowania `TRACE` do analizy problemów na styku
+keyword-biblioteka.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- `robot --dryrun tests/` uruchamia cały suite BEZ faktycznego wykonania
+  kroków (bez klikania w przeglądarce, bez wywołań API) - sprawdza tylko, czy
+  wszystkie keywordy istnieją, mają poprawną liczbę argumentów i czy importy
+  się ładują. Używaj tego jako szybkiej bramki przed właściwym, długim
+  przebiegiem, zwłaszcza po większym refaktorze resource'ów.
+- Biblioteka `robotframework-debuglibrary` daje prawdziwy breakpoint w kodzie
+  `.robot` (`Debug` keyword) - zatrzymuje wykonanie i otwiera interaktywną
+  konsolę, w której można wywoływać kolejne keywordy ręcznie i podglądać
+  bieżące wartości zmiennych, zamiast zgadywać stan z samego logu.
+- Rozszerzenie Robot Framework Language Server w VS Code pozwala postawić
+  breakpoint kliknięciem przy linii i uruchomić test w trybie "Debug" -
+  wykonanie zatrzymuje się dokładnie w tym miejscu z podglądem zmiennych w
+  panelu bocznym, bez modyfikowania samego pliku testowego.
+- Po nieudanym, długim przebiegu użyj `robot --rerunfailed output.xml
+  --output rerun.xml tests/`, aby ponowić WYŁĄCZNIE testy zakończone FAIL, a
+  potem scal wyniki `rebot --merge output.xml rerun.xml` - znacznie szybsze
+  niż odpalanie całego suite'u od nowa przy diagnozowaniu pojedynczej awarii.
+- `--loglevel TRACE` (poziom niżej niż DEBUG) pokazuje w log.html również
+  wywołania na granicy Robot Framework - biblioteka Pythona, przydatne przy
+  diagnozowaniu, czy problem leży w samym teście, czy w kodzie biblioteki
+  (np. nieoczekiwana konwersja argumentu).
+
+## 3. Przykładowy kod
+Szybka walidacja składni bez wykonania testów:
+```bash
+robot --dryrun --outputdir results/dryrun tests/
+```
+
+Breakpoint z robotframework-debuglibrary (`pip install robotframework-debuglibrary`):
+```robotframework
+*** Settings ***
+Documentation     Debugowanie krok po kroku z interaktywna konsola.
+Library           Browser
+Library           DebugLibrary
+
+*** Test Cases ***
+Diagnoza nieudanego logowania
+    [Documentation]    Zatrzymuje wykonanie tuz przed asercja, do recznej inspekcji.
+    New Browser    chromium    headless=False
+    New Page       https://example.com/login
+    Fill Text      css=#login       tester
+    Fill Text      css=#password    zle_haslo
+    Click          css=#submit
+    Debug
+    Get Text    css=.komunikat-bledu    ==    Nieprawidlowe dane logowania
+```
+W otwartej konsoli `(Robot)` można wpisać np. `Get Text    css=.komunikat-bledu`,
+zanim zdecydujemy, jaka finalna asercja trafi do testu.
+
+Ponowienie tylko nieudanych testów i scalenie wyników:
+```bash
+# 1. Pelny przebieg, cos failuje
+robot --outputdir results tests/
+
+# 2. Ponow WYLACZNIE testy z FAIL
+robot --rerunfailed results/output.xml \
+      --outputdir results --output rerun.xml tests/
+
+# 3. Polacz oryginalny i ponowiony wynik w jeden raport
+rebot --merge --outputdir results \
+      results/output.xml results/rerun.xml
+```
+
+## 4. Najczęstsze błędy
+- Traktowanie `--dryrun` jako pełnej walidacji testu - sprawdza tylko
+  istnienie i sygnatury keywordów, NIE wykrywa błędów logiki, złych
+  locatorów ani problemów z rzeczywistymi danymi.
+- Zostawienie keyworda `Debug` (z robotframework-debuglibrary) w kodzie
+  wpiętym do CI - pipeline zawiesza się w nieskończoność, czekając na
+  interaktywny input, którego w CI nikt nie poda.
+- Uruchamianie `--rerunfailed` bez wcześniejszego `rebot --merge` - w
+  finalnym raporcie widać tylko wynik ponowienia, a historia oryginalnej
+  awarii (i faktu, że coś w ogóle failowało za pierwszym razem) ginie.
+- Ustawienie `--loglevel TRACE` na stałe w CI dla całego, dużego suite'u -
+  log.html robi się gigantyczny i wolno się otwiera, zamiast używać TRACE
+  punktowo, tylko przy debugowaniu konkretnego, wyizolowanego testu.
+- Poleganie wyłącznie na debugowaniu w VS Code lokalnie i brak nawyku
+  odtwarzania awarii z samych artefaktów CI (output.xml/log.html) - część
+  błędów (np. różnice środowiska, dane z bazy) nie odtworzy się lokalnie.
+
+## 5. Ulepszenia z AI
+- Wklej fragment log.html z poziomu TRACE (wywołanie keyworda wraz z
+  argumentami przekazanymi do biblioteki Pythona) i poproś AI o wskazanie,
+  czy problem leży po stronie testu, czy konwersji argumentów w bibliotece.
+- Poproś AI o wygenerowanie skryptu/kroku CI, który po nieudanym przebiegu
+  automatycznie uruchamia `--rerunfailed` i `rebot --merge`, publikując
+  jeden, scalony raport jako artefakt.
+- Podaj AI listę keywordów użytych w suicie i poproś o wskazanie, w których
+  miejscach warto tymczasowo wstawić `Debug` (robotframework-debuglibrary)
+  podczas lokalnej diagnozy najbardziej niestabilnego testu.
+- Wklej wynik `robot --dryrun` z błędem (np. "No keyword with name X found")
+  i poproś AI o zlokalizowanie literówki lub brakującego importu Resource.
+- Poproś o checklistę code review pilnującą, żeby żaden keyword `Debug` ani
+  flaga `--loglevel TRACE` nie trafiły przypadkiem na stałe do gałęzi main
+  lub konfiguracji pipeline'u CI.
+
+## Zadanie na dziś
+Uruchom dowolny własny suite komendą `robot --dryrun`, żeby upewnić się, że
+wszystkie importy i keywordy się zgadzają. Następnie zainstaluj
+`robotframework-debuglibrary`, dodaj tymczasowo keyword `Debug` w środku
+jednego testu, uruchom go i w interaktywnej konsoli sprawdź wartość
+dowolnej zmiennej lub wynik pojedynczego keyworda - na końcu usuń `Debug`
+przed commitem.
+
+================================================================================
