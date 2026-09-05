@@ -3839,3 +3839,122 @@ dowolnej zmiennej lub wynik pojedynczego keyworda - na końcu usuń `Debug`
 przed commitem.
 
 ================================================================================
+# Dzień 37 (2026-09-05, sobota) - Podstawy składni Robot Framework runda 3 (struktury sterujące IF/ELSE, FOR, WHILE, BREAK/CONTINUE)
+
+## 1. Temat dnia
+Trzecia runda podstaw składni - tym razem natywne struktury sterujące
+wprowadzone w Robot Framework 4/5: blok `IF`/`ELSE IF`/`ELSE`, pętla `FOR`
+w wariantach `IN` / `IN RANGE` / `IN ENUMERATE` / `IN ZIP`, pętla `WHILE`
+oraz sterowanie przepływem pętli słowami `BREAK` i `CONTINUE`. To
+alternatywa dla starszych, mniej czytelnych trików (np. rekurencyjnych
+keywordów imitujących pętlę) i podstawa do pisania logiki testu wprost w
+pliku `.robot` bez wychodzenia do Pythona.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Każdy blok `IF` i `FOR`/`WHILE` musi być jawnie zamknięty słowem `END` -
+  brak `END` to jeden z najczęstszych błędów składniowych w RF 5+.
+- Warunek w `IF` jest wyrażeniem Pythona (podawanym jako zwykły tekst) -
+  porównania stringów wymagają cudzysłowów w warunku, np.
+  `IF    "${status}" == "aktywny"`, inaczej RF spróbuje potraktować
+  `${status}` jako nazwę zmiennej Pythona.
+- `FOR ... IN RANGE` służy do prostego licznika, `IN ENUMERATE` daje od razu
+  indeks i wartość, a `IN ZIP` pozwala iterować równolegle po kilku listach
+  naraz - wybór właściwego wariantu eliminuje ręczne liczenie indeksów.
+- `WHILE` powinien mieć jawny warunek stopu albo limit `limit=` (np.
+  `WHILE    ${licznik} < 10    limit=100`) - pętla bez limitu przy błędnym
+  warunku zawiesza cały przebieg testu w nieskończoność.
+- Krótki, jednolinijkowy `IF` (tzw. inline IF, bez `END`) nadaje się tylko
+  do pojedynczego, prostego keyworda - dla więcej niż jednej instrukcji
+  zawsze używaj pełnego bloku z `END`, bo inaczej kod staje się nieczytelny.
+
+## 3. Przykładowy kod
+```robotframework
+*** Settings ***
+Library    Collections
+
+*** Variables ***
+@{UZYTKOWNICY}      Anna    Bartek    Celina
+@{ROLE}             admin    user    guest
+
+*** Test Cases ***
+Klasyfikacja statusu odpowiedzi API
+    [Template]    NONE
+    FOR    ${kod}    IN    200    301    404    500
+        IF    ${kod} < 300
+            Log    ${kod}: sukces
+        ELSE IF    ${kod} < 400
+            Log    ${kod}: przekierowanie
+        ELSE IF    ${kod} < 500
+            Log    ${kod}: blad klienta
+        ELSE
+            Log    ${kod}: blad serwera
+        END
+    END
+
+Przypisanie roli kazdemu uzytkownikowi
+    [Documentation]    FOR IN ZIP laczy dwie listy element po elemencie.
+    FOR    ${user}    ${rola}    IN ZIP    ${UZYTKOWNICY}    ${ROLE}
+        Log    Uzytkownik ${user} ma role ${rola}
+    END
+
+Oczekiwanie na gotowosc serwisu z limitem prob
+    [Documentation]    WHILE z jawnym limitem, zeby uniknac zawieszenia testu.
+    ${gotowy}=    Set Variable    ${False}
+    ${proba}=     Set Variable    ${0}
+    WHILE    not ${gotowy}    limit=5x
+        ${proba}=    Evaluate    ${proba} + 1
+        ${gotowy}=    Run Keyword And Return Status    Sprawdz Status Serwisu
+        IF    ${gotowy}
+            BREAK
+        END
+        Sleep    1s
+    END
+    Should Be True    ${gotowy}    msg=Serwis nie odpowiedzial po 5 probach
+
+*** Keywords ***
+Sprawdz Status Serwisu
+    [Documentation]    Placeholder - w realnym tescie wywolanie API/health-check.
+    No Operation
+```
+
+## 4. Najczęstsze błędy
+- Zapomnienie o `END` na końcu bloku `IF`/`FOR`/`WHILE` - parser zgłasza
+  błąd składniowy dopiero przy próbie uruchomienia całego suite'u.
+- Porównywanie zmiennych typu string w `IF` bez cudzysłowów
+  (`IF    ${status} == aktywny`) - Robot Framework próbuje to wykonać jako
+  wyrażenie Pythona i rzuca `NameError`, zamiast po prostu porównać teksty.
+- `WHILE` bez `limit=` i bez `BREAK` w środku - przy błędzie logicznym w
+  warunku test wisi w nieskończoność i trzeba go zabijać ręcznie w CI.
+- Zagnieżdżanie więcej niż 2-3 poziomów `IF`/`FOR` w jednym teście zamiast
+  wydzielenia logiki do osobnego Custom Keyword - kod staje się nieczytelny
+  i trudny do debugowania.
+- Używanie `FOR ... IN RANGE` tam, gdzie wystarczyłoby `IN ENUMERATE` -
+  ręczne liczenie indeksu (`${lista}[${i}]`) jest bardziej podatne na błędy
+  niż wbudowana enumeracja.
+
+## 5. Ulepszenia z AI
+- Wklej pseudokod logiki warunkowej (np. z wymagań biznesowych) i poproś AI
+  o przełożenie go 1:1 na blok `IF`/`ELSE IF`/`ELSE` w składni Robot
+  Framework, łącznie z poprawnym domykaniem `END`.
+- Poproś AI o przegląd istniejącego testu pod kątem miejsc, gdzie ręczna
+  pętla przez indeksy (`${i}`) da się zastąpić czytelniejszym
+  `FOR ... IN ENUMERATE` lub `FOR ... IN ZIP`.
+- Gdy `WHILE` się zawiesza w CI, wklej AI fragment logu z ostatnimi
+  iteracjami i poproś o wskazanie, dlaczego warunek stopu nigdy nie staje
+  się prawdziwy.
+- Poproś AI o wygenerowanie wariantu testu z `BREAK`/`CONTINUE` na
+  podstawie opisu "pomiń wpisy testowe, sprawdzaj tylko produkcyjne, przerwij
+  po pierwszym błędzie krytycznym".
+- Użyj AI do wyjaśnienia różnicy między inline `IF` (bez `END`) a pełnym
+  blokiem `IF...END` i poproś o wskazanie, w których miejscach istniejącego
+  suite'u inline `IF` obniża czytelność i warto go rozwinąć.
+
+## Zadanie na dziś
+Napisz test z pętlą `FOR ... IN ENUMERATE` przechodzącą po liście co
+najmniej 5 elementów, wewnątrz dodaj blok `IF`/`ELSE IF`/`ELSE`
+klasyfikujący każdy element (np. wg wartości liczbowej lub długości
+tekstu), a na końcu dopisz drugi test z pętlą `WHILE` z jawnym `limit=` i
+słowem `BREAK`, symulujący oczekiwanie na warunek (np. licznik osiągający
+zadaną wartość).
+
+================================================================================
