@@ -3958,3 +3958,111 @@ słowem `BREAK`, symulujący oczekiwanie na warunek (np. licznik osiągający
 zadaną wartość).
 
 ================================================================================
+# Dzień 38 (2026-09-06, niedziela) - Słowa kluczowe wbudowane BuiltIn (runda 3: mniej znane keywordy do łączenia tekstu, liczenia wystąpień i kontrolowanego kończenia testu)
+
+## 1. Temat dnia
+Trzecia runda tematu BuiltIn - keywordy, które rzadko pojawiają się na starcie
+nauki, ale regularnie przydają się w bardziej rozbudowanych testach: łączenie
+tekstu bez ręcznej konkatenacji, liczenie wystąpień podciągów, wywoływanie
+funkcji z modułów Pythona wewnątrz `Evaluate`, warunkowe kończenie testu z
+wynikiem PASS oraz defensywne sprawdzanie, czy zmienna w ogóle istnieje.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- `Catenate` z opcją `SEPARATOR=` buduje czytelne komunikaty/teksty z kilku
+  fragmentów bez ręcznego `+` czy f-stringów w `Evaluate` - domyślny separator
+  to spacja, ale można ustawić dowolny (np. `SEPARATOR=, `).
+- `Should Contain X Times` i `Get Count` to dwa różne narzędzia do tego samego
+  problemu: pierwsze od razu asercją sprawdza liczbę wystąpień podciągu,
+  drugie tylko zwraca liczbę do dalszej logiki - używaj asercji, gdy chodzi
+  wyłącznie o weryfikację, a `Get Count`, gdy wynik jest potrzebny dalej.
+- `Evaluate ... modules=` pozwala bezpiecznie korzystać z funkcji modułów
+  standardowych (np. `random`, `datetime`) bezpośrednio w wyrażeniu, zamiast
+  pisać do tego osobny Custom Keyword w Pythonie.
+- `Pass Execution If` kończy test natychmiast ze statusem PASS, gdy warunek
+  jest spełniony - to coś innego niż `Skip If` (status SKIP) i innego niż
+  zwykłe `Return From Keyword` (kończy tylko keyword, nie cały test).
+- `Variable Should Exist` / `Variable Should Not Exist` sprawdza obecność
+  zmiennej przed jej użyciem (np. opcjonalnej zmiennej z Resource file) i daje
+  czytelny komunikat błędu zamiast surowego `Variable '${X}' not found`.
+
+## 3. Przykładowy kod
+```robotframework
+*** Settings ***
+Library    Collections
+
+*** Test Cases ***
+Budowanie komunikatu i liczenie wystapien
+    [Documentation]    Catenate z separatorem oraz Should Contain X Times / Get Count.
+    ${uzytkownik}=      Set Variable    Anna
+    ${rola}=            Set Variable    admin
+    ${komunikat}=       Catenate    SEPARATOR=,
+    ...                 Uzytkownik: ${uzytkownik}
+    ...                 Rola: ${rola}
+    ...                 Status: aktywny
+    Log    ${komunikat}    console=True
+
+    ${log_serwera}=    Set Variable    ERROR: timeout ERROR: timeout ERROR: retry OK
+    Should Contain X Times    ${log_serwera}    ERROR    2
+    ${liczba_ok}=      Get Count    ${log_serwera}    OK
+    Should Be True     ${liczba_ok} == 1
+
+Losowy identyfikator przez Evaluate z modules
+    [Documentation]    Evaluate z modules= wywoluje funkcje z biblioteki standardowej Pythona.
+    ${id}=    Evaluate    random.randint(1000, 9999)    modules=random
+    Should Be True    ${id} >= 1000
+    ${dzis}=  Evaluate    datetime.date.today().isoformat()    modules=datetime
+    Log    Data testu: ${dzis}
+
+Warunkowe zakonczenie testu i defensywne zmienne
+    [Documentation]    Pass Execution If oraz Variable Should Exist.
+    ${srodowisko}=    Set Variable    staging
+    Pass Execution If    '${srodowisko}' == 'staging'
+    ...    msg=Test pomijany z wynikiem PASS - funkcja niedostepna na staging
+
+    Variable Should Exist    ${srodowisko}
+    Log    Zmienna srodowisko istnieje, mozna kontynuowac
+```
+
+## 4. Najczęstsze błędy
+- Ręczne sklejanie tekstu operatorem `+` albo f-stringiem wewnątrz `Evaluate`
+  zamiast `Catenate` - mniej czytelne w kodzie `.robot` i trudniejsze do
+  utrzymania przy wielu fragmentach.
+- Mylenie `Pass Execution If` ze `Skip If` - pierwsze oznacza test jako
+  PASS (wygląda jak sukces w report.html), drugie jako SKIP (widać, że test
+  nie został faktycznie zweryfikowany); użycie złego prowadzi do fałszywego
+  poczucia bezpieczeństwa w raportach.
+- Używanie `Evaluate` z dowolnym kodem Pythona bez ograniczenia `modules=`
+  do naprawdę potrzebnych modułów - zwiększa ryzyko przypadkowego wykonania
+  niebezpiecznego lub nieprzewidywalnego kodu w wyrażeniu.
+- Sprawdzanie `Should Contain X Times` z liczbą `0` zamiast użycia
+  `Should Not Contain` - technicznie działa, ale komunikat błędu jest mniej
+  czytelny niż dedykowany keyword do braku wystąpienia.
+- Brak `Variable Should Exist` przed użyciem zmiennej opcjonalnej pochodzącej
+  z Resource file lub zmiennej środowiskowej - test pada z mylącym
+  `Variable '${X}' not found` głęboko w logu zamiast na etapie walidacji.
+
+## 5. Ulepszenia z AI
+- Wklej fragment testu z ręczną konkatenacją tekstu (`+`, f-string) i poproś
+  Claude/Copilot o przepisanie go na `Catenate` z odpowiednim `SEPARATOR=`.
+- Poproś AI o wygenerowanie asercji `Should Contain X Times` na podstawie
+  przykładowego logu/tekstu i opisu, ile razy dany fragment powinien się
+  pojawić.
+- Zapytaj AI, którego modułu Pythona użyć w `Evaluate ... modules=` dla
+  konkretnego zadania (np. generowanie losowych danych, operacje na datach)
+  i jak bezpiecznie ograniczyć wyrażenie do tego jednego modułu.
+- Poproś o wyjaśnienie różnicy `Pass Execution If` vs `Skip If` vs `Fail` w
+  kontekście konkretnego scenariusza, gdy nie jest jasne, którego użyć.
+- Wklej listę zmiennych używanych w suite (w tym opcjonalnych z Resource
+  files) i poproś AI o wskazanie miejsc, gdzie brakuje `Variable Should
+  Exist` przed pierwszym użyciem.
+
+## Zadanie na dziś
+Napisz test, który: (1) buduje jeden komunikat tekstowy z co najmniej trzech
+fragmentów przez `Catenate` z niestandardowym separatorem, (2) na przykładowym
+tekście/logu sprawdza liczbę wystąpień wybranego słowa przez `Should Contain
+X Times` oraz osobno pobiera tę liczbę przez `Get Count` do dalszego
+porównania, (3) generuje wartość przez `Evaluate` z `modules=` (np. `random`
+lub `datetime`) i dodaje asercję na wyniku, (4) na końcu dodaje
+`Variable Should Exist` sprawdzające zmienną ustawioną wcześniej w teście.
+
+================================================================================
