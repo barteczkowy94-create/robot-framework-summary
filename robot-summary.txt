@@ -3957,4 +3957,103 @@ tekstu), a na końcu dopisz drugi test z pętlą `WHILE` z jawnym `limit=` i
 słowem `BREAK`, symulujący oczekiwanie na warunek (np. licznik osiągający
 zadaną wartość).
 
+================================================================================# Dzień 38 (2026-09-07, poniedziałek) - Słowa kluczowe wbudowane BuiltIn runda 3 (opcje asercji tekstowych, Catenate, Log Many/Log Variables, Get Time, Repeat Keyword)
+
+## 1. Temat dnia
+Trzecia runda BuiltIn - keywordy i opcje pomijane w poprzednich dwóch rundach:
+dodatkowe argumenty asercji tekstowych (ignore_case, collapse_spaces),
+budowanie tekstu przez Catenate, zbiorcze logowanie (Log Many, Log Variables),
+pobieranie znacznika czasu bez importu dodatkowej biblioteki (Get Time) oraz
+proste, kontrolowane powtarzanie kroku (Repeat Keyword).
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Should Be Equal, Should Contain i Should Match przyjmują named argumenty
+  ignore_case=True i collapse_spaces=True - to czytelniejsze rozwiązanie niż
+  ręczne .lower()/.strip() w Evaluate, bo komunikat błędu w log.html nadal
+  pokazuje oryginalne, nieprzetworzone wartości.
+- Catenate łączy wiele fragmentów w jeden string, domyślnie rozdzielając je
+  spacją; pierwszy argument w formie `SEPARATOR=xxx` pozwala ustawić własny
+  separator - czytelniejsze niż konkatenacja przez ${a}${b}, gdy trzeba
+  połączyć kilka zmiennych/tekstów naraz w jednym miejscu.
+- Log Many loguje kilka wartości jedną instrukcją (wygodne przy debugowaniu
+  wielu zmiennych naraz), a Log Variables zrzuca do logu WSZYSTKIE aktualnie
+  widoczne zmienne - używaj go punktowo, bo przy stałym użyciu zaśmieca
+  log.html i utrudnia znalezienie istotnej informacji.
+- Get Time zwraca znacznik czasu w wybranym formacie (np. `epoch`, domyślny
+  czytelny timestamp) bez konieczności importowania biblioteki DateTime -
+  przydatne np. do budowania unikalnej nazwy pliku/screenshota.
+- Repeat Keyword powtarza krok zadaną liczbę razy (np. `3 times`) lub przez
+  czas (np. `2s`), ale nie sprawdza żadnego warunku między powtórzeniami -
+  gdy potrzebny jest warunek stopu, właściwym narzędziem jest WHILE z
+  `limit=`, a nie Repeat Keyword.
+
+## 3. Przykładowy kod
+```robotframework
+*** Variables ***
+${DATA}    2026-09-07
+
+*** Test Cases ***
+Weryfikacja mniej oczywistych keywordow BuiltIn
+    [Documentation]    Asercje z opcjami ignore_case, Catenate, Log Many,
+    ...    Get Time i Repeat Keyword.
+    Should Be Equal    Aktywny    aktywny    ignore_case=True
+    Should Contain    Robot Framework to super narzedzie    framework    ignore_case=True
+    Should Match    Raport_2026_09_07.txt    Raport_????_??_??.txt
+
+    ${nazwa_pliku}=    Catenate    SEPARATOR=_    Raport    ${DATA}    dzienny
+    ${timestamp}=      Get Time    epoch
+    Log Many    Nazwa pliku: ${nazwa_pliku}    Znacznik czasu: ${timestamp}
+
+    Repeat Keyword    3 times    Sprawdz Ponownie
+
+*** Keywords ***
+Sprawdz Ponownie
+    [Documentation]    Placeholder - w realnym tescie np. odswiezenie strony
+    ...    lub ponowne zapytanie do API.
+    Log    Ponowna proba wykonana
+```
+
+## 4. Najczęstsze błędy
+- Ręczne .lower()/.strip() w Evaluate zamiast ignore_case=True/
+  collapse_spaces=True w Should Be Equal/Contain/Match - dłuższy kod i utrata
+  czytelnego komunikatu błędu z oryginalnymi wartościami w log.html.
+- Nadużywanie Log Variables w każdym teście "na wszelki wypadek" - ogromne,
+  nieczytelne logi, w których trudno znaleźć właściwą informację przy
+  debugowaniu awarii.
+- Mylenie Catenate (łączenie tekstu, domyślnie ze spacją) ze zwykłą
+  konkatenacją przez ${a}${b} (bez separatora) - nieoczekiwana obecność lub
+  brak spacji/podkreślenia w wyniku.
+- Używanie Repeat Keyword tam, gdzie test powinien sprawdzać warunek między
+  powtórzeniami (np. "czekaj, aż serwis odpowie") - Repeat Keyword nie ma
+  logiki stopu, więc powtórzy krok ślepo zadaną liczbę razy niezależnie od
+  wyniku.
+- Poleganie na domyślnym formacie Get Time (czytelny timestamp jako string)
+  i próba wykonywania na nim operacji arytmetycznych bez podania formatu
+  `epoch` lub jawnej konwersji.
+
+## 5. Ulepszenia z AI
+- Wklej fragment testu z ręcznym .lower()/.strip() w Evaluate i poproś AI o
+  zamianę na odpowiednie argumenty ignore_case=/collapse_spaces= w
+  Should Be Equal/Contain/Match.
+- Poproś AI o wygenerowanie unikalnej nazwy pliku/screenshota łączącej
+  Catenate i Get Time na podstawie opisu formatu (np.
+  "prefiks_raport_YYYYMMDD_HHMMSS").
+- Wklej duży fragment log.html po użyciu Log Variables i poproś AI o
+  wyłuskanie tylko zmiennych istotnych dla debugowanego problemu, zamiast
+  przeglądać wszystko ręcznie.
+- Poproś AI o ocenę, czy dany przypadek testowy z Repeat Keyword nie
+  powinien zostać przepisany na WHILE z jawnym warunkiem stopu (np. gdy
+  liczba powtórzeń zależy od odpowiedzi API, a nie jest stała).
+- Poproś AI o listę mniej znanych, ale przydatnych keywordów BuiltIn do
+  konkretnego scenariusza (np. "jak w RF zbudować znacznik czasu bez importu
+  dodatkowej biblioteki") wraz z porównaniem do alternatyw z DateTime.
+
+## Zadanie na dziś
+Napisz test, który: (1) porównuje dwa teksty różniące się wielkością liter
+przez Should Be Equal z ignore_case=True, (2) buduje nazwę pliku przez
+Catenate z separatorem "_" łączącym stały prefiks i znacznik czasu z
+Get Time, (3) loguje obie wartości jedną instrukcją Log Many, (4) wywołuje
+Repeat Keyword 3 razy na prostym keywordzie i w komentarzu zapisz, czy w tym
+konkretnym przypadku lepszym wyborem nie byłby WHILE.
+
 ================================================================================
