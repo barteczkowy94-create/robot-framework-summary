@@ -4057,3 +4057,113 @@ Repeat Keyword 3 razy na prostym keywordzie i w komentarzu zapisz, czy w tym
 konkretnym przypadku lepszym wyborem nie byłby WHILE.
 
 ================================================================================
+
+# Dzień 39 (2026-09-08, wtorek) - Zmienne i ich zasięgi runda 3 (rozszerzona składnia dostępu, zmienne zarezerwowane RF, priorytety źródeł)
+
+## 1. Temat dnia
+Trzecia runda tematu zmiennych - rozszerzona składnia dostępu do elementów
+list/słowników (indeksowanie, zagnieżdżone struktury, modyfikacja pojedynczego
+elementu), wielokrotne przypisanie zmiennych z keywordu zwracającego listę/
+krotkę, zmienne zarezerwowane Robot Framework (${TEST_NAME}, ${OUTPUT_DIR}
+itd.) oraz pełna kolejność priorytetów źródeł zmiennych.
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Rozszerzona składnia zmiennych pozwala na zagnieżdżony dostęp jedną linią:
+  ${dane}[uzytkownicy][0][imie] - zamiast wielu pośrednich zmiennych i
+  ręcznego rozpakowywania struktury krok po kroku.
+- Przypisanie do pojedynczego elementu istniejącej listy/słownika przez
+  ${lista}[0]=    Nowa wartosc modyfikuje strukturę w miejscu (in-place) -
+  nie trzeba tworzyć nowej listy ani używać Collections do prostej podmiany
+  jednego elementu.
+- Wielokrotne przypisanie z jednego keywordu zwracającego listę/krotkę
+  (${a}    ${b}    ${c}=    Keyword) wymaga zgodności liczby zmiennych po
+  lewej z liczbą zwracanych elementów - nadmiarowe elementy można zebrać do
+  @{reszta} zamiast wyliczać je wszystkie po imieniu.
+- Zmienne zarezerwowane RF (dostępne zawsze, bez definiowania) jak
+  ${TEST_NAME}, ${SUITE_NAME}, ${SUITE_SOURCE}, ${OUTPUT_DIR}, ${LOG_FILE},
+  ${CURDIR} czy ${/} ułatwiają budowanie przenośnych, unikalnych ścieżek do
+  plików wynikowych bez hardkodowania.
+- Kolejność priorytetów źródeł zmiennych od najwyższego: zmienne z linii
+  poleceń (-v/--variablefile) > zmienne ustawione w trakcie wykonania
+  (VAR/Set ... Variable) > zmienne z Resource/Library > sekcja
+  *** Variables *** w suite - CLI zawsze wygrywa, niezależnie od tego, co
+  suite próbuje nadpisać.
+
+## 3. Przykładowy kod
+```robotframework
+*** Settings ***
+Library    Collections
+Library    OperatingSystem
+
+*** Variables ***
+&{KONFIGURACJA}    srodowisko=staging
+...                uzytkownicy=${{ [{'imie': 'Ala', 'wiek': 30}, {'imie': 'Bob', 'wiek': 25}] }}
+
+*** Test Cases ***
+Zagniezdzony dostep i modyfikacja elementow
+    [Documentation]    Indeksowanie zagniezdzonych struktur i przypisanie do elementu.
+    Log    Drugi uzytkownik: ${KONFIGURACJA}[uzytkownicy][1][imie]
+
+    @{liczby}=    Create List    10    20    30
+    ${liczby}[1]=    Set Variable    99
+    Should Be Equal As Integers    ${liczby}[1]    99
+
+Wielokrotne przypisanie z listy zwroconej przez keyword
+    ${status}    ${kod}    ${tresc}=    Pobierz Wynik Zapytania
+    Should Be Equal    ${status}    OK
+    Should Be Equal As Integers    ${kod}    200
+    Log    Tresc odpowiedzi: ${tresc}
+
+Zmienne zarezerwowane RF przy budowaniu sciezki
+    [Documentation]    Uzycie ${OUTPUT_DIR} i ${TEST_NAME} do unikalnej nazwy pliku.
+    ${plik}=    Set Variable    ${OUTPUT_DIR}${/}wynik_${TEST_NAME}.log
+    Create File    ${plik}    Test: ${TEST_NAME} w suite: ${SUITE_NAME}
+    File Should Exist    ${plik}
+
+*** Keywords ***
+Pobierz Wynik Zapytania
+    [Documentation]    Placeholder symulujacy keyword zwracajacy krotke/liste.
+    RETURN    OK    200    Zawartosc odpowiedzi serwera
+```
+
+## 4. Najczęstsze błędy
+- Próba pythonowego slicingu ${lista}[1:3] bezpośrednio w zwykłym miejscu
+  (poza ${{ }}) - RF potraktuje to jako próbę dostępu do klucza "1:3"
+  słownika/listy i zgłosi błąd zamiast zwrócić wycinek.
+- Zapominanie, że ${lista}[0]=    Wartosc modyfikuje listę w miejscu - jeśli
+  ta sama lista jest "przekazywana dalej" przez Set Suite Variable, zmiana
+  "przecieka" do kolejnych testów korzystających z tej samej referencji.
+- Niedopasowanie liczby zmiennych przy wielokrotnym przypisaniu (np.
+  ${a}    ${b}=    Keyword, gdy Keyword zwraca 3 elementy) - błąd
+  rozpakowania (ValueError) zamiast czytelnego komunikatu o brakującej
+  zmiennej.
+- Hardkodowanie ścieżek do plików (np. "C:\wyniki\test.png") zamiast użycia
+  ${OUTPUT_DIR} i ${/} - test działa tylko na jednej maszynie/w jednym CI.
+- Mylenie kolejności priorytetów - założenie, że sekcja *** Variables ***
+  nadpisze wartość podaną w -v z linii poleceń, podczas gdy jest odwrotnie.
+
+## 5. Ulepszenia z AI
+- Wklej złożoną, zagnieżdżoną strukturę danych (JSON/dict) i poproś
+  Claude/Copilot o wygenerowanie poprawnej ścieżki dostępu
+  ${var}[klucz][0][pole] bez ręcznego liczenia nawiasów i indeksów.
+- Poproś AI o wyjaśnienie, które źródło zmiennej "wygra" w konkretnym
+  przypadku (ta sama nazwa w -v, w Resource i w Variables) - szybciej niż
+  szukanie tego w dokumentacji.
+- Wklej keyword zwracający krotkę/listę o zmiennej długości i poproś AI o
+  dopasowanie liczby zmiennych po lewej stronie przypisania, w tym o dodanie
+  @{reszta} tam, gdzie liczba elementów nie jest stała.
+- Poproś AI o listę zmiennych zarezerwowanych RF przydatnych w konkretnym
+  scenariuszu (np. budowanie unikalnych nazw plików raportów per test/suite).
+- Użyj AI do przeglądu suite'u pod kątem "przeciekających" modyfikacji
+  list/słowników przez Set Suite/Global Variable połączonych z przypisaniem
+  do pojedynczego elementu (in-place mutation).
+
+## Zadanie na dziś
+Napisz test, który: (1) zdefiniuje zagnieżdżoną strukturę (listę słowników) i
+odczyta pole z drugiego elementu listy przez pełną ścieżkę indeksów, (2)
+zmodyfikuje jeden element wcześniej utworzonej listy przez przypisanie
+${lista}[n]=, (3) wywoła własny keyword zwracający 3 wartości i rozpakuje je
+do 3 osobnych zmiennych, (4) zbuduje ścieżkę pliku wynikowego z użyciem
+${OUTPUT_DIR}, ${/} i zmiennej zarezerwowanej ${TEST_NAME}.
+
+================================================================================
