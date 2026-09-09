@@ -4057,3 +4057,102 @@ Repeat Keyword 3 razy na prostym keywordzie i w komentarzu zapisz, czy w tym
 konkretnym przypadku lepszym wyborem nie byłby WHILE.
 
 ================================================================================
+
+# Dzień 39 (2026-09-09, środa) - Zmienne i ich zasięgi runda 3 (wbudowane zmienne automatyczne, rozszerzona składnia dostępu, zmienne specjalne)
+
+## 1. Temat dnia
+Trzecia runda tematu zmiennych - automatyczne zmienne wbudowane RF (${TEST_NAME},
+${SUITE_NAME}, ${OUTPUT_DIR}, ${CURDIR}, @{TEST_TAGS}, ${PREV_TEST_STATUS}),
+rozszerzona składnia dostępu do zagnieżdżonych struktur (item access, atrybuty
+obiektów, wywołania metod wprost w ${}) oraz zmienne specjalne (${EMPTY},
+${SPACE}, ${None}, ${True}/${False}, ${/}).
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- Zmienne wbudowane (automatyczne) są dostępne bez żadnej deklaracji w każdym
+  suicie i teście - ${TEST_NAME}/${SUITE_NAME} do logowania kontekstu,
+  ${OUTPUT_DIR}/${CURDIR} do budowania ścieżek plików niezależnych od miejsca
+  uruchomienia testów (lokalnie vs CI).
+- Rozszerzona składnia dostępu pozwala w jednym wyrażeniu sięgnąć głębiej w
+  strukturę - ${slownik}[klucz][podklucz], ${lista}[0], ${obiekt.atrybut},
+  a nawet wywołać metodę: ${obiekt.metoda()} - bez pośrednich zmiennych.
+- Zmienne specjalne mają konkretny typ Pythona, a nie tekst: ${EMPTY} to
+  pusty string, ${None} to Python None, ${True}/${False} to wartości
+  logiczne - używaj ich w asercjach zamiast literalnych napisów "None"/"True".
+- ${/} to przenośny separator ścieżek (na Linuksie "/", na Windows "\\"),
+  a ${:} to separator PATH systemowego - buduj ścieżki przez ${/}, nie przez
+  zahardkodowany znak, żeby test działał identycznie na każdym systemie.
+- ${PREV_TEST_STATUS} i ${PREV_TEST_NAME} odnoszą się do poprzedniego testu w
+  KOLEJNOŚCI WYKONANIA w tym samym suicie, nie do testu powiązanego logicznie
+  - nie opieraj na nich logiki biznesowej, tylko np. warunkowe pomijanie kroków.
+
+## 3. Przykładowy kod
+```robotframework
+*** Settings ***
+Library    OperatingSystem
+Library    Collections
+
+*** Variables ***
+&{KONFIG}    limity=${{ {'timeout': 30, 'retries': 3} }}
+
+*** Test Cases ***
+Wbudowane zmienne i przenosne sciezki plikow
+    [Documentation]    Wykorzystanie ${TEST_NAME}, ${SUITE_NAME}, ${OUTPUT_DIR}, ${/}
+    Log    Test "${TEST_NAME}" z suite'u "${SUITE_NAME}"
+    ${plik}=    Set Variable    ${OUTPUT_DIR}${/}wynik_${TEST_NAME}.txt
+    Create File    ${plik}    Test zaliczony: ${TEST_NAME}
+    File Should Exist    ${plik}
+    ${zawartosc}=    Get File    ${plik}
+    Should Contain    ${zawartosc}    ${TEST_NAME}
+
+Rozszerzona skladnia dostepu i zmienne specjalne
+    Log    Limit timeout: ${KONFIG}[limity][timeout]
+    Log    Liczba prob ponowienia: ${KONFIG}[limity][retries]
+
+    ${pole_tekstowe}=    Set Variable    ${EMPTY}
+    Should Be Equal    ${pole_tekstowe}    ${EMPTY}
+
+    ${flaga}=    Set Variable    ${True}
+    Should Be True    ${flaga} != ${False}
+
+    Log    Znaczniki biezacego testu: @{TEST_TAGS}
+```
+
+## 4. Najczęstsze błędy
+- Zahardkodowane ścieżki plików (np. "C:\\wyniki\\log.txt" albo "/tmp/log.txt")
+  zamiast ${OUTPUT_DIR}${/}log.txt - test działa lokalnie, ale wywala się w
+  CI albo na innym systemie operacyjnym.
+- Traktowanie ${EMPTY}/${None} jak zwykłego tekstu w cudzysłowie zamiast
+  zmiennej specjalnej - np. porównanie ${wartosc} == "None" zamiast
+  ${wartosc} == ${None}, co daje fałszywy wynik przy realnym None z Pythona.
+- Zbyt głębokie zagnieżdżenie dostępu w jednej linii (np.
+  ${a}[b][c].d[0].e()) - nieczytelne i trudne do zdebugowania przy awarii;
+  lepiej rozbić na 2-3 pośrednie zmienne.
+- Opieranie logiki testu na ${PREV_TEST_STATUS} przy testach, które mogą
+  być uruchamiane pojedynczo (np. przez selekcję tagiem) - wtedy zmienna
+  odnosi się do zupełnie innego, przypadkowego testu albo nie istnieje.
+- Mylenie @{TEST_TAGS} (lista) z pojedynczym stringiem - próba
+  Should Be Equal ${TEST_TAGS} smoke zamiast List Should Contain Value.
+
+## 5. Ulepszenia z AI
+- Poproś AI o przeskanowanie suite'u pod kątem zahardkodowanych ścieżek
+  plików i zamianę ich na kombinację ${OUTPUT_DIR}/${CURDIR} i ${/}.
+- Wklej złożone, jednolinijkowe wyrażenie dostępu do zagnieżdżonej struktury
+  i poproś o rozbicie go na czytelniejsze kroki pośrednie z opisowymi
+  nazwami zmiennych.
+- Poproś AI o wyjaśnienie różnicy między ${EMPTY}, pustym stringiem "" wpisanym
+  ręcznie i ${None} na konkretnym przykładzie asercji, która nie działa
+  zgodnie z oczekiwaniami.
+- Poproś AI o wygenerowanie testu wykorzystującego ${TEST_NAME}/${SUITE_NAME}
+  do zbudowania unikalnej, czytelnej nazwy pliku raportu lub zrzutu ekranu.
+- Wklej listę dostępnych zmiennych wbudowanych RF i poproś AI o dobranie
+  tych najbardziej przydatnych do konkretnego scenariusza (np. warunkowe
+  logowanie w zależności od wyniku poprzedniego testu).
+
+## Zadanie na dziś
+Napisz suite z dwoma testami: (1) zapisujący plik do ${OUTPUT_DIR} z nazwą
+zawierającą ${TEST_NAME} i sklejoną przez ${/}, a następnie odczytujący i
+weryfikujący jego zawartość; (2) wykorzystujący słownik z zagnieżdżonym
+dostępem (np. &{KONFIG}[sekcja][klucz]) oraz zmienne specjalne ${EMPTY} i
+${True}/${False} w asercjach. Dodatkowo zaloguj @{TEST_TAGS} biezacego testu.
+
+================================================================================
