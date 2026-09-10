@@ -4156,3 +4156,128 @@ dostępem (np. &{KONFIG}[sekcja][klucz]) oraz zmienne specjalne ${EMPTY} i
 ${True}/${False} w asercjach. Dodatkowo zaloguj @{TEST_TAGS} biezacego testu.
 
 ================================================================================
+
+# Dzień 40 (2026-09-10, czwartek) - Test/Suite/Task setup i teardown runda 3 ([Setup] na keywordach z RF 7.0, nadpisywanie Test Setup, Run Keywords AND, Task Setup/Teardown w RPA)
+
+## 1. Temat dnia
+Trzecia runda tematu setup/teardown - niuanse, które łatwo przeoczyć: [Setup]
+zdefiniowany bezpośrednio w teście NADPISUJE (a nie uzupełnia) Test Setup z
+sekcji Settings, nowość z RF 7.0 czyli własny [Setup] na słowach kluczowych
+użytkownika (symetrycznie do znanego już [Teardown]), łączenie kilku kroków w
+jednej linii Suite Setup/Teardown przez `Run Keywords ... AND ...` oraz
+Task Setup/Task Teardown jako odpowiednik Test Setup/Teardown w plikach RPA
+(*** Tasks ***).
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- [Setup] zdefiniowany bezpośrednio w `*** Test Cases ***` NADPISUJE globalny
+  Test Setup z sekcji Settings, nie dodaje się do niego - jeśli globalny setup
+  ma się nadal wykonać dla tego jednego testu, trzeba go jawnie wywołać razem
+  z dodatkowym krokiem wewnątrz [Setup] tego testu.
+- Od RF 7.0 słowo kluczowe użytkownika może mieć własny [Setup] (analogicznie
+  do [Teardown] dostępnego od RF 4.0) - wykonuje się PRZED ciałem keyworda i
+  pozwala na lokalną inicjalizację niezależną od setupu całego testu.
+- `Run Keywords    krok1    AND    krok2    AND    krok3` w linii Suite
+  Setup/Suite Teardown pozwala połączyć kilka kroków bez tworzenia osobnego
+  keyworda - ale przy więcej niż 2-3 krokach czytelniej jest wydzielić własny,
+  nazwany keyword.
+- Jeśli Suite Teardown zakończy się niepowodzeniem, WSZYSTKIE testy w danym
+  suicie zostają retroaktywnie oznaczone jako FAILED w raporcie - nawet jeśli
+  same przeszły poprawnie, zanim teardown zawiódł.
+- W plikach RPA (`*** Tasks ***`) używa się Task Setup/Task Teardown zamiast
+  Test Setup/Teardown - to czysto kosmetyczny alias (w statystykach i logu RF
+  wciąż widnieje jako "setup/teardown testu"), stosowany dla czytelności kodu
+  w zespołach RPA.
+
+## 3. Przykładowy kod
+```robotframework
+*** Settings ***
+Library         Collections
+Test Setup      Globalny Setup Testu
+Suite Teardown  Run Keywords    Zamknij Polaczenie Z Baza
+...             AND    Wyslij Podsumowanie Suite'u
+
+*** Test Cases ***
+Test z domyslnym Test Setup z Settings
+    [Documentation]    Korzysta wprost z globalnego Test Setup, bez zmian.
+    Should Be True    1 == 1
+
+Test z wlasnym Setup nadpisujacym globalny
+    [Setup]    Run Keywords    Globalny Setup Testu    AND    Setup Dodatkowy Dla Tego Testu
+    [Documentation]    [Setup] w tescie NADPISUJE Test Setup z Settings -
+    ...    trzeba jawnie wywolac oba, jesli globalny setup ma nadal dzialac.
+    Should Be True    1 == 1
+
+*** Keywords ***
+Globalny Setup Testu
+    Log    Globalny setup wykonywany przed kazdym testem (o ile go nie nadpisze)
+
+Setup Dodatkowy Dla Tego Testu
+    Log    Dodatkowa inicjalizacja tylko dla wybranego testu
+
+Polacz Z Systemem
+    [Setup]    Log    Setup keyworda (RF 7.0) - wykonuje sie przed cialem "Polacz Z Systemem"
+    [Teardown]    Log    Teardown keyworda - wykonuje sie zawsze po "Polacz Z Systemem"
+    Log    Wlasciwa logika laczenia z systemem
+
+Zamknij Polaczenie Z Baza
+    Log    Symulacja zamkniecia polaczenia z baza danych
+
+Wyslij Podsumowanie Suite'u
+    Log    Symulacja wyslania podsumowania wynikow suite'u
+```
+
+```robotframework
+# Plik RPA - Task Setup/Task Teardown to alias Test Setup/Teardown dla *** Tasks ***
+*** Settings ***
+Task Setup       Log    Przygotowanie srodowiska przed zadaniem RPA
+Task Teardown    Log    Sprzatanie po zadaniu RPA (np. zamkniecie aplikacji)
+
+*** Tasks ***
+Przetworz Faktury Z Folderu
+    Log    Wlasciwa logika RPA - przetwarzanie plikow faktur
+```
+
+## 4. Najczęstsze błędy
+- Zakładanie, że [Setup] w teście DODAJE się do Test Setup z Settings, a nie
+  go zastępuje - w efekcie globalny setup (np. logowanie do systemu) po
+  cichu nie wykonuje się dla tego jednego testu.
+- Traktowanie keyword-level [Setup] jako dostępnego we wszystkich wersjach RF
+  - ta funkcja istnieje dopiero od RF 7.0, starsze wersje ją zignorują albo
+  zgłoszą błąd składni.
+- Upychanie zbyt wielu kroków w jednej linii `Run Keywords ... AND ...` w
+  Suite Setup/Teardown - powyżej 2-3 kroków linia staje się nieczytelna i
+  trudna w utrzymaniu; lepiej wydzielić osobny, nazwany keyword.
+- Brak sprawdzenia Suite Teardown w logu, gdy nagle WSZYSTKIE testy w suicie
+  są czerwone - zespół szuka przyczyny w samych testach, zamiast najpierw
+  zweryfikować, czy to właśnie Suite Teardown zawiódł.
+- Mylenie Task Setup/Teardown z osobnym mechanizmem - to ten sam mechanizm co
+  Test Setup/Teardown, więc łączenie w jednym pliku `Task Setup` z sekcją
+  `*** Test Cases ***` (zamiast `*** Tasks ***`) nie ma sensu i myli czytelnika.
+
+## 5. Ulepszenia z AI
+- Wklej sekcję Settings z Test Setup i listę testów z własnymi [Setup], a AI
+  wskaże, które testy po cichu nadpisują globalny setup, i zaproponuje
+  bezpieczną wersję wywołującą oba kroki.
+- Poproś AI o wygenerowanie [Setup]/[Teardown] (RF 7.0) dla konkretnego
+  keyworda na podstawie opisu, jakie zasoby otwiera i zamyka - np. połączenie
+  sieciowe, plik tymczasowy, sesja przeglądarki.
+- Podaj AI opis kilku kroków, które mają się wykonać w Suite Setup/Teardown, i
+  poproś o ocenę, czy lepiej użyć `Run Keywords ... AND ...`, czy wydzielić
+  osobny keyword - wraz z uzasadnieniem czytelności.
+- Wklej log z uruchomienia, w którym wszystkie testy w suicie nagle są FAILED,
+  i poproś AI o zdiagnozowanie, czy przyczyną jest błąd w Suite Teardown, a
+  nie w samych testach.
+- Poproś AI o przegląd plików RPA pod kątem spójności nazewnictwa Task
+  Setup/Teardown vs Test Setup/Teardown, żeby wychwycić literówki wynikające
+  z kopiowania kodu między projektem RPA a klasycznym projektem testowym.
+
+## Zadanie na dziś
+Stwórz suite z: (1) Test Setup zdefiniowanym w Settings oraz jednym testem,
+który go nadpisuje własnym [Setup] wywołującym oba kroki (globalny + dodatkowy);
+(2) keywordem z własnym [Setup] i [Teardown] (RF 7.0); (3) Suite Teardown
+zbudowanym z `Run Keywords ... AND ...` obejmującym co najmniej dwa kroki.
+Celowo spraw, by jeden z kroków Suite Teardown zakończył się błędem (np. przez
+`Fail`) i zaobserwuj w log.html, że wszystkie testy w suicie stają się FAILED,
+mimo że same przeszły poprawnie.
+
+================================================================================
