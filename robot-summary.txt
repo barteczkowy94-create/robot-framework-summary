@@ -4281,3 +4281,132 @@ Celowo spraw, by jeden z kroków Suite Teardown zakończył się błędem (np. p
 mimo że same przeszły poprawnie.
 
 ================================================================================
+# Dzień 41 (2026-09-11, piątek) - Biblioteki standardowe runda 3 (Collections: Combine Lists/Remove Duplicates/Get Slice From List, String: Generate Random String/Split String/Encode-Decode, OperatingSystem: Copy File/List Files In Directory/Wait Until Created, DateTime: Subtract Time From Date/Convert Date)
+
+## 1. Temat dnia
+Trzecia runda bibliotek standardowych - keywordy pominięte w rundzie 1 (Dzień 5:
+podstawy Collections/String/OperatingSystem/DateTime) i rundzie 2 (Dzień 23:
+Get From Dictionary, Sort List, regex w String, DateTime). Dziś: łączenie i
+czyszczenie list (Combine Lists, Remove Duplicates, Get Slice From List),
+generowanie i dzielenie tekstu (Generate Random String, Split String,
+Encode String To Bytes/Decode Bytes To String), operacje na plikach
+(Copy File, List Files In Directory, Wait Until Created) oraz liczenie
+zakresów dat (Subtract Time From Date, Convert Date).
+
+## 2. Kluczowe zasady i najlepsze praktyki
+- `Combine Lists` scala kilka list w jedną NOWĄ listę (nie modyfikuje żadnej
+  z list wejściowych), a `Remove Duplicates` usuwa powtórzenia zachowując
+  kolejność pierwszego wystąpienia - razem dają szybki sposób na
+  deduplikację danych testowych z kilku źródeł naraz.
+- `Get Slice From List` pobiera fragment listy po indeksach (start, end)
+  bez modyfikowania oryginału - czytelniejsze niż ręczne wycinanie przez
+  `${lista}[1:4]` w Evaluate, zwłaszcza gdy indeksy pochodzą ze zmiennych.
+- `Generate Random String` z argumentami `[LETTERS]`, `[NUMBERS]`,
+  `[LOWER]`, `[UPPER]` generuje unikalne dane testowe (loginy, hasła, nazwy)
+  bez ryzyka kolizji przy równoległym uruchamianiu testów (pabot).
+- `Copy File`/`Copy Directory` i `List Files In Directory` (z filtrem wzorca,
+  np. `*.txt`) pozwalają zweryfikować efekty operacji na plikach bez
+  ręcznego wywoływania poleceń systemowych przez `Run Process`.
+- `Wait Until Created` czeka aż plik faktycznie powstanie (np. wygenerowany
+  asynchronicznie przez inny proces) zamiast stałego `Sleep` - test rusza
+  dalej natychmiast po pojawieniu się pliku, a nie po sztywnym czasie.
+
+## 3. Przykładowy kod
+```robotframework
+*** Settings ***
+Library    Collections
+Library    String
+Library    OperatingSystem
+Library    DateTime
+
+*** Variables ***
+@{LISTA_A}      1    2    3    4
+@{LISTA_B}      3    4    5    6
+
+*** Test Cases ***
+Laczenie list i generowanie danych testowych
+    [Documentation]    Combine Lists, Remove Duplicates, Get Slice From List,
+    ...    Generate Random String, Split String, Encode/Decode.
+    ${polaczona}=    Combine Lists    ${LISTA_A}    ${LISTA_B}
+    ${unikalne}=     Remove Duplicates    ${polaczona}
+    Log    Lista bez duplikatow: ${unikalne}
+
+    ${srodek}=    Get Slice From List    ${unikalne}    1    4
+    Log    Wycinek listy (indeksy 1-3): ${srodek}
+
+    ${login}=    Generate Random String    8    [LETTERS]
+    ${email}=    Catenate    SEPARATOR=@    ${login}    test.local
+    @{czesci}=    Split String    ${email}    @
+    Should Be Equal    ${czesci}[1]    test.local
+
+    ${bajty}=         Encode String To Bytes    ${login}    UTF-8
+    ${odkodowany}=    Decode Bytes To String    ${bajty}    UTF-8
+    Should Be Equal    ${odkodowany}    ${login}
+
+Operacje na plikach wynikowych
+    [Documentation]    Copy File, List Files In Directory, Wait Until Created.
+    Create File    ${OUTPUT_DIR}${/}raport_zrodlowy.txt    Dane raportu dziennego
+    Copy File      ${OUTPUT_DIR}${/}raport_zrodlowy.txt    ${OUTPUT_DIR}${/}raport_kopia.txt
+    Wait Until Created    ${OUTPUT_DIR}${/}raport_kopia.txt    timeout=5s
+    @{pliki}=    List Files In Directory    ${OUTPUT_DIR}    *.txt
+    Log    Pliki txt w katalogu wyjsciowym: @{pliki}
+
+Zakres dat raportu tygodniowego
+    [Documentation]    Get Current Date, Subtract Time From Date, Convert Date.
+    ${dzisiaj}=       Get Current Date    result_format=%Y-%m-%d
+    ${tydzien_temu}=  Subtract Time From Date    ${dzisiaj}    7 days
+    ...    date_format=%Y-%m-%d    result_format=%Y-%m-%d
+    Log    Zakres raportu: od ${tydzien_temu} do ${dzisiaj}
+
+    ${jako_datetime}=    Convert Date    ${dzisiaj}    date_format=%Y-%m-%d
+    ...    result_format=datetime
+    Log    Obiekt datetime: rok=${jako_datetime.year}, miesiac=${jako_datetime.month}
+```
+
+## 4. Najczęstsze błędy
+- Zakładanie, że `Combine Lists` modyfikuje któryś z argumentów w miejscu -
+  zwraca NOWĄ listę, więc trzeba przypisać wynik do zmiennej, inaczej
+  oryginalne listy pozostają bez zmian.
+- Ręczne pisanie pętli deduplikującej listę zamiast jednego wywołania
+  `Remove Duplicates` - więcej kodu i większe ryzyko pomyłki w warunku.
+- Używanie `Generate Random String` bez ustalonego zestawu znaków
+  (`[LETTERS]`/`[NUMBERS]`) tam, gdzie system pod testem wymaga konkretnego
+  formatu (np. hasło z co najmniej jedną cyfrą) - wygenerowany string może
+  nie spełnić walidacji formularza.
+- Zastępowanie `Wait Until Created` sztywnym `Sleep` przy oczekiwaniu na
+  plik generowany asynchronicznie - test albo czeka niepotrzebnie długo,
+  albo (przy zbyt krótkim Sleep) failuje mimo że plik i tak by powstał.
+- Mylenie formatu wejściowego i wyjściowego w `Subtract Time From
+  Date`/`Convert Date` (parametry `date_format`/`result_format`) - brak
+  jawnego podania formatu wejściowego przy nietypowej dacie kończy się
+  błędem parsowania zamiast czytelnego wyniku.
+
+## 5. Ulepszenia z AI
+- Podaj AI wymagania walidacji formularza (np. "login: 8 znaków, tylko
+  litery; hasło: 12 znaków, litery i cyfry") i poproś o odpowiednie
+  wywołania `Generate Random String` z właściwymi zestawami znaków.
+- Wklej fragment testu z ręczną deduplikacją/wycinaniem listy przez
+  Evaluate i poproś AI o zamianę na `Remove Duplicates`/`Get Slice From
+  List` z biblioteki Collections.
+- Poproś AI o wygenerowanie testu weryfikującego operacje na plikach
+  (Copy File + List Files In Directory) na podstawie opisu procesu
+  biznesowego (np. "kopiuj wygenerowany raport do archiwum i sprawdź, że
+  jest tam dokładnie jeden plik").
+- Podaj AI dwa formaty dat używane w różnych systemach (np. `%Y-%m-%d` i
+  `%d/%m/%Y`) i poproś o gotowe wywołanie `Convert Date` konwertujące
+  jeden na drugi wraz z obsługą stref czasowych, jeśli są istotne.
+- Wklej błąd `Wait Until Created` (timeout) z logu i poproś AI o
+  zdiagnozowanie, czy problem leży w zbyt krótkim `timeout=`, czy w tym, że
+  proces generujący plik w ogóle się nie uruchomił.
+
+## Zadanie na dziś
+Napisz suite z trzema testami: (1) łączący dwie listy przez `Combine Lists`,
+usuwający duplikaty przez `Remove Duplicates` i pobierający środkowy
+fragment przez `Get Slice From List`; (2) generujący losowy login przez
+`Generate Random String`, dzielący zbudowany z niego adres e-mail przez
+`Split String` i weryfikujący domenę; (3) tworzący plik przez `Create File`,
+kopiujący go przez `Copy File`, czekający na kopię przez `Wait Until
+Created` i listujący pliki `*.txt` w `${OUTPUT_DIR}` przez `List Files In
+Directory`.
+
+================================================================================

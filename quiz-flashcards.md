@@ -491,3 +491,92 @@
   a potem scala oryginalny i ponowiony wynik w jeden raport
 - robot --dryrun -> szybka walidacja składni/importów/keywordów bez
   faktycznego wykonania kroków testu
+
+## Tydzień 8 - Quiz (piątek, 2026-09-11) - Dni 36-40
+
+1. Do czego służy `robot --dryrun`?
+   a) Uruchamia pełną walidację logiki testu wraz z realnymi krokami
+   b) Sprawdza istnienie keywordów, liczbę argumentów i poprawność importów,
+      BEZ faktycznego wykonania kroków (klikania, wywołań API)
+   c) Uruchamia wyłącznie testy oznaczone tagiem "smoke"  d) Automatycznie
+      naprawia nieudane testy
+
+2. Co się stanie, jeśli keyword `Debug` (z robotframework-debuglibrary)
+   zostanie przypadkiem wpięty do pipeline'u CI?
+   a) CI go po prostu ignoruje  b) Pipeline zawiesza się w nieskończoność,
+      czekając na interaktywny input, którego nikt nie poda  c) Test
+      automatycznie kończy się sukcesem  d) Włącza się poziom logowania TRACE
+
+3. Dlaczego pętla `WHILE` w Robot Framework powinna mieć jawny `limit=`?
+   a) Bez tego RF zgłasza błąd składniowy już przy starcie  b) Przy błędnym
+      warunku stopu pętla może wykonywać się w nieskończoność i zawiesić
+      cały przebieg testu  c) `limit=` przyspiesza działanie pętli  d) Jest
+      wymagany tylko w Robot Framework 4.x
+
+4. Czym różni się `FOR ... IN ZIP` od `FOR ... IN RANGE`?
+   a) To dokładnie te same warianty, różni się tylko nazwa  b) `IN ZIP`
+      iteruje równolegle po kilku listach naraz element po elemencie,
+      `IN RANGE` generuje prosty licznik liczbowy  c) `IN ZIP` działa
+      wyłącznie na liczbach całkowitych  d) `IN RANGE` zwraca od razu
+      indeks i wartość elementu
+
+5. Co robi named argument `ignore_case=True` w `Should Be Equal`?
+   a) Całkowicie pomija wykonanie asercji  b) Porównuje dwa teksty bez
+      rozróżniania wielkości liter, a w komunikacie błędu nadal pokazuje
+      oryginalne, nieprzetworzone wartości  c) Usuwa wszystkie spacje z
+      obu porównywanych tekstów  d) Działa wyłącznie przy porównywaniu liczb
+
+6. Czym różni się `Catenate` od zwykłej konkatenacji `${a}${b}`?
+   a) Niczym, to dokładne synonimy  b) `Catenate` domyślnie rozdziela
+      łączone fragmenty spacją (a przez `SEPARATOR=xxx` własnym
+      separatorem), `${a}${b}` sklejenie bez żadnego separatora
+   c) `Catenate` działa wyłącznie na wartościach liczbowych  d) `${a}${b}`
+      zawsze wstawia podkreślenie między fragmentami
+
+7. Dlaczego warto budować ścieżki plików przez `${OUTPUT_DIR}` i `${/}`
+   zamiast zahardkodowanej ścieżki, np. "C:\\wyniki\\log.txt"?
+   a) `${OUTPUT_DIR}`/`${/}` są przenośne między lokalnym środowiskiem a CI
+      i między systemami operacyjnymi (Linux vs Windows)  b) Zahardkodowana
+      ścieżka jest zawsze szybsza w wykonaniu  c) `${OUTPUT_DIR}` trzeba
+      ręcznie zadeklarować w sekcji `*** Variables ***`  d) Różnicy nie ma,
+      to kwestia stylu
+
+8. Co się dzieje, gdy test ma własny `[Setup]`, a jednocześnie w sekcji
+   Settings zdefiniowany jest globalny `Test Setup`?
+   a) Oba kroki wykonują się po kolei, jeden po drugim  b) `[Setup]` w
+      teście NADPISUJE globalny `Test Setup` - jeśli globalny setup ma się
+      nadal wykonać, trzeba go jawnie wywołać razem z dodatkowym krokiem
+   c) Robot Framework zgłasza błąd konfiguracji i przerywa test  d) Globalny
+      `Test Setup` zawsze wygrywa i nadpisuje lokalny `[Setup]`
+
+**Odpowiedzi:** 1-b, 2-b, 3-b, 4-b, 5-b, 6-b, 7-a, 8-b
+
+## Tydzień 8 - Fiszki
+
+- robot --dryrun -> waliduje istnienie keywordów, argumenty i importy BEZ
+  wykonania kroków testu; nie wykrywa błędów logiki ani złych locatorów
+- robotframework-debuglibrary (keyword Debug) -> prawdziwy breakpoint z
+  interaktywną konsolą; NIGDY nie może trafić do CI (pipeline się zawiesi)
+- robot --rerunfailed output.xml + rebot --merge -> ponawia tylko testy
+  FAIL, a potem scala oryginalny i ponowiony wynik w jeden raport
+- IF/FOR/WHILE w RF 5+ -> każdy blok musi być jawnie zamknięty słowem END
+- WHILE bez limit= i bez BREAK -> ryzyko nieskończonej pętli przy błędnym
+  warunku stopu
+- FOR ... IN ZIP -> iteruje równolegle po kilku listach naraz; IN ENUMERATE
+  daje od razu indeks i wartość, bez ręcznego liczenia
+- Should Be Equal/Contain/Match z ignore_case=True/collapse_spaces=True ->
+  czytelniejsza alternatywa dla ręcznego .lower()/.strip() w Evaluate
+- Catenate SEPARATOR=xxx -> łączy kilka fragmentów tekstu z własnym
+  separatorem, w odróżnieniu od sklejenia ${a}${b} bez separatora
+- Get Time epoch -> znacznik czasu bez importu biblioteki DateTime,
+  przydatny do unikalnych nazw plików/screenshotów
+- Zmienne automatyczne ${TEST_NAME}/${SUITE_NAME}/${OUTPUT_DIR}/${CURDIR} ->
+  dostępne bez deklaracji, budują przenośne ścieżki i czytelne logi
+- ${EMPTY}/${None}/${True}/${False} -> mają realny typ Pythona, a nie są
+  zwykłym tekstem - porównuj ${x} == ${None}, nie ${x} == "None"
+- [Setup] na teście NADPISUJE Test Setup z Settings (nie dodaje się do
+  niego) - trzeba jawnie wywołać oba kroki, jeśli globalny ma nadal działać
+- Suite Teardown, który failuje -> retroaktywnie oznacza WSZYSTKIE testy w
+  suicie jako FAILED, nawet jeśli same przeszły poprawnie
+- Task Setup/Task Teardown w plikach RPA (*** Tasks ***) -> kosmetyczny
+  alias Test Setup/Teardown, ten sam mechanizm pod inną nazwą
